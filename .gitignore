@@ -1,0 +1,7 @@
+/.vscode/
+/utils/
+/any/
+/Lem62/.env
+/logs/*
+/docs/*
+!.gitkeep
