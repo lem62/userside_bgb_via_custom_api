@@ -12,11 +12,11 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
                 $bgbUsFacade = new BgbUsFacade();
                 $bgbUsFacade->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $arg1['taskId']);
                 switch ($arg1['stateId']) {
-                    case 15: // Получение номера договора
+                    case 16: // Получение номера договора
                         return $bgbUsFacade->getContractNumber($arg1['taskId'], $arg1['customerId']);
-                    case 16: // Регистрация Ону
+                    case 19: // Регистрация Ону
                         return $bgbUsFacade->attachGponSerial($arg1['taskId'], $arg1['customerId']);
-                    case 12: // Выполнено
+                    case 20: // Выполнено
                         if (!isset($arg1['stateCurrendId'])) {
                             return $bgbUsFacade->response(false, "Завершить задачу можно только после регистрации ONU");
                         }
@@ -29,7 +29,7 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
                         if (!isset($arg1['stateCurrendId'])) {
                             break;
                         }
-                        if ($arg1['stateCurrendId'] != 3) { // ТМЦ
+                        if ($arg1['stateCurrendId'] != 17) { // ТМЦ
                             break;
                         }
                         return $bgbUsFacade->removeEquipmentInTask($arg1['taskId']);
@@ -43,9 +43,9 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
                     $bgbUsFacade = new BgbUsFacade();
                     $bgbUsFacade->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $arg1['taskId']);
                     switch ($arg1['stateId']) {
-                        case 15: // Получение номера договора
+                        case 16: // Получение номера договора
                             return $bgbUsFacade->response(false, "Номер договора выделен");
-                        case 16: // Регистрация Ону
+                        case 19: // Регистрация Ону
                             return $bgbUsFacade->response(false, "ONU зарегистрирована");
                     }
                     $bgbUsFacade = null;
