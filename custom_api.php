@@ -1,29 +1,20 @@
 <?php
 
-error_reporting(E_ALL); ini_set('display_errors', 1);
+// error_reporting(E_ALL); ini_set('display_errors', 1);
 
 require '/home/ldb/php/userside_bgb_via_custom_api/Lem62/BgbUsFacade.php';
 
 function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, $arg5 = 0) {
+    // pl($apiFunction . " " . argToString($arg1, $arg2, $arg3, $arg4, $arg5) . "\n");
     switch ($apiFunction) {
         case "task_state_change_before":
-            // pl($apiFunction . " " . argToString($arg1, $arg2, $arg3, $arg4, $arg5) . "\n");
             $bgbUsFacade = new BgbUsFacade();
             return $bgbUsFacade->registrationNewCustomer($arg1);
             break;
+
         case "task_state_change":
-            // pl($apiFunction . " " . argToString($arg1, $arg2, $arg3, $arg4, $arg5) . "\n");
-            if (is_array($arg1) && isset($arg1['stateId']) && isset($arg1['customerId'])) {
-                $bgbUsFacade = new BgbUsFacade();
-                $bgbUsFacade->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $arg1['taskId']);
-                switch ($arg1['stateId']) {
-                    case 16: // Получение номера договора
-                        return $bgbUsFacade->response(false, "Номер договора выделен");
-                    case 19: // Регистрация Ону
-                        return $bgbUsFacade->response(false, "ONU зарегистрирована");
-                }
-                $bgbUsFacade = null;
-            }
+            $bgbUsFacade = new BgbUsFacade();
+            return $bgbUsFacade->registrationNewCustomerAfter($arg1);
             break;
     }
     return true;

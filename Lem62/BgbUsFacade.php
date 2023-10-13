@@ -96,6 +96,7 @@ class BgbUsFacade
 
     public function registrationNewCustomer($eventArray)
     {
+        $this->setLogPrefix("registrationNewCustomer");
         if (!is_array($eventArray)) {
             return $this->response(true, "Не получен массив из события");
         }
@@ -108,29 +109,62 @@ class BgbUsFacade
         if (!isset($eventArray['stateId'])) {
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
+        if (!in_array($eventArray['stateId'], $this->statusNewCustomer)) {
+            return $this->response(true, "Не подходящий id статуса в массиве из события");
+        }
+        $this->log("Event array - " . $this->arrayToString($eventArray, true));
         $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
         switch ($eventArray['stateId']) {
-            case $statusNewCustomer['get_contract']: // Получение номера договора
-                return $this->getContractNumber($arg1['taskId'], $arg1['customerId']);
-            case $statusNewCustomer['apply_equipmnet']: // Регистрация Ону
-                return $this->attachGponSerial($arg1['taskId'], $arg1['customerId']);
-            case $statusNewCustomer['cancel']: // Отмена предыдущего статуса
-                if (!isset($arg1['stateCurrendId'])) {
+            case $this->statusNewCustomer['get_contract']: // Получение номера договора
+                return $this->getContractNumber($eventArray['taskId'], $eventArray['customerId']);
+            case $this->statusNewCustomer['apply_equipmnet']: // Регистрация Ону
+                return $this->attachGponSerial($eventArray['taskId'], $eventArray['customerId']);
+            case $this->statusNewCustomer['cancel']: // Отмена предыдущего статуса
+                if (!isset($eventArray['stateCurrendId'])) {
                     break;
                 }
-                if ($arg1['stateCurrendId'] != $statusNewCustomer['add_equipment']) { // ТМЦ
+                if ($eventArray['stateCurrendId'] != $this->statusNewCustomer['add_equipment']) { // ТМЦ
                     break;
                 }
-                return $bgbUsFacade->removeEquipmentInTask($arg1['taskId']);
-            case $statusNewCustomer['finish']: // Выполнено
-                if (!isset($arg1['stateCurrendId'])) {
+                return $this->removeEquipmentInTask($eventArray['taskId']);
+            case $this->statusNewCustomer['finish']: // Выполнено
+                if (!isset($eventArray['stateCurrendId'])) {
                     return $this->response(false, "Завершить задачу можно только после регистрации ONU");
                 }
-                if ($arg1['stateCurrendId'] != $statusNewCustomer['equipmnet_applied']) { // Ону зарегистрирована
+                if ($eventArray['stateCurrendId'] != $this->statusNewCustomer['equipmnet_applied']) { // Ону зарегистрирована
                     return $this->response(false, "Завершить задачу можно только после регистрации ONU");
                 }
-                $this->switchToRegular($arg1['customerId']);
+                $this->switchToRegular($eventArray['customerId']);
                 break;
+        }
+        return $this->response(true, "Обработано");
+    }
+
+    public function registrationNewCustomerAfter($eventArray)
+    {
+        $this->setLogPrefix("registrationNewCustomerAfter");
+        if (!is_array($eventArray)) {
+            return $this->response(true, "Не получен массив из события");
+        }
+        if (!isset($eventArray['customerId'])) {
+            return $this->response(true, "Не определен id абонента в массиве из события");
+        }
+        if (!isset($eventArray['taskId'])) {
+            return $this->response(true, "Не определен id задания в массиве из события");
+        }
+        if (!isset($eventArray['stateId'])) {
+            return $this->response(true, "Не определен id статуса в массиве из события");
+        }
+        if (!in_array($eventArray['stateId'], $this->statusNewCustomer)) {
+            return $this->response(true, "Не подходящий id статуса в массиве из события");
+        }
+        $this->log("Event array - " . $this->arrayToString($eventArray, true));
+        $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
+        switch ($eventArray['stateId']) {
+            case $this->statusNewCustomer['get_contract']: // Получение номера договора
+                return $this->response(false, "Номер договора выделен");
+            case $this->statusNewCustomer['apply_equipmnet']: // Регистрация Ону
+                return $this->response(false, "ONU зарегистрирована");
         }
         return $this->response(true, "Обработано");
     }
@@ -273,7 +307,7 @@ class BgbUsFacade
 
     public function response($succes, $msg)
     {
-        $this->log("Response - succes: " . $succes . ", msg:" . $msg);
+        $this->log("Response - succes: " . $succes . ", msg: " . $msg);
         $result['result'] = ($succes) ? "0" : "1";
         $result['msg'] = $msg;
         return $this->redirectIfError($result);
@@ -456,8 +490,8 @@ class BgbUsFacade
         * Возвращаем их на склад ($this->storageId)
         */
         $request = new TransferInventory();
-        $request->inventoryId = $invId;
-        $request->dstAccount = "2040300000" . $this->storageId;
+        $request->inventory_id = $invId;
+        $request->dst_account = "2040300000" . $this->storageId;
         return $this->stringToJson($this->command($request));
     }
 

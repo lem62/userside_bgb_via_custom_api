@@ -4,13 +4,16 @@ namespace Lem62\Traits;
 
 trait OutputFormat {
 
-    public function arrayToString($array)
+    public function arrayToString($array, $trimSpace = false)
     {
         if (!is_array($array)) {
             return $array;
         }
         $str = var_export($array, true);
         $str = str_replace(PHP_EOL, "", $str);
+        if ($trimSpace) {
+            $str = preg_replace("/[ ]+/", " ", $str);
+        }
         return $str;
     }
 
