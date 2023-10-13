@@ -50,6 +50,14 @@ class BgbUsFacade
     private $tariffListId = 25;
     private $storageId = 16;
     private $redirectUrl = null;
+    private $statusNewCustomer = [
+        'get_contract' => 16,
+        'add_equipment' => 17,
+        'apply_equipmnet' => 19,
+        'equipmnet_applied' => 18,
+        'cancel' => 11,
+        'finish' => 20,
+    ];
 
     public function __construct()
     {
@@ -86,7 +94,48 @@ class BgbUsFacade
         $this->logPrefix = $logPrefix;
     }
 
-    public function getContractNumber($taskId, $customerId) 
+    public function registrationNewCustomer($eventArray)
+    {
+        if (!is_array($eventArray)) {
+            return $this->response(true, "Не получен массив из события");
+        }
+        if (!isset($eventArray['customerId'])) {
+            return $this->response(true, "Не определен id абонента в массиве из события");
+        }
+        if (!isset($eventArray['taskId'])) {
+            return $this->response(true, "Не определен id задания в массиве из события");
+        }
+        if (!isset($eventArray['stateId'])) {
+            return $this->response(true, "Не определен id статуса в массиве из события");
+        }
+        $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
+        switch ($eventArray['stateId']) {
+            case $statusNewCustomer['get_contract']: // Получение номера договора
+                return $this->getContractNumber($arg1['taskId'], $arg1['customerId']);
+            case $statusNewCustomer['apply_equipmnet']: // Регистрация Ону
+                return $this->attachGponSerial($arg1['taskId'], $arg1['customerId']);
+            case $statusNewCustomer['cancel']: // Отмена предыдущего статуса
+                if (!isset($arg1['stateCurrendId'])) {
+                    break;
+                }
+                if ($arg1['stateCurrendId'] != $statusNewCustomer['add_equipment']) { // ТМЦ
+                    break;
+                }
+                return $bgbUsFacade->removeEquipmentInTask($arg1['taskId']);
+            case $statusNewCustomer['finish']: // Выполнено
+                if (!isset($arg1['stateCurrendId'])) {
+                    return $this->response(false, "Завершить задачу можно только после регистрации ONU");
+                }
+                if ($arg1['stateCurrendId'] != $statusNewCustomer['equipmnet_applied']) { // Ону зарегистрирована
+                    return $this->response(false, "Завершить задачу можно только после регистрации ONU");
+                }
+                $this->switchToRegular($arg1['customerId']);
+                break;
+        }
+        return $this->response(true, "Обработано");
+    }
+
+    private function getContractNumber($taskId, $customerId) 
     {
         $this->setLogPrefix("getContractNumber");
         $customer = $this->getCustomerData($customerId);
@@ -151,7 +200,7 @@ class BgbUsFacade
         return $this->response(true, "Номер договора получен");
     }
 
-    public function removeEquipmentInTask($taskId)
+    private function removeEquipmentInTask($taskId)
     {
         $this->setLogPrefix("removeEquipmentInTask");
         $onus = $this->getEquipmentFromTask($taskId);
@@ -171,7 +220,7 @@ class BgbUsFacade
         return $this->response(true, "ТМЦ удалены");
     }
 
-    public function attachGponSerial($taskId, $customerId) 
+    private function attachGponSerial($taskId, $customerId) 
     {
         $this->setLogPrefix("attachGponSerial");
         $serials = $this->getEquipmentFromTask($taskId);
@@ -205,7 +254,7 @@ class BgbUsFacade
             $this->log($msg, false);
             return $this->response(false, $msg);
         }
-        if (!$this->changeTaskStatus($taskId, 18)) { // ONU зарегистрирована
+        if (!$this->changeTaskStatus($taskId, $statusNewCustomer['equipmnet_applied'])) { // ONU зарегистрирована
             $this->log("Can no set pre complate status", false);
             return $this->response(false, "Не удалось перевести задачу в статус - ONU зарегистрирована");
         } else {
@@ -213,7 +262,7 @@ class BgbUsFacade
         }
     }
 
-    public function switchToRegular($customerId) 
+    private function switchToRegular($customerId) 
     {
         $this->setLogPrefix("switchToRegular");
         $regular = $this->switchToRegularCustomer($customerId);
@@ -224,6 +273,7 @@ class BgbUsFacade
 
     public function response($succes, $msg)
     {
+        $this->log("Response - succes: " . $succes . ", msg:" . $msg);
         $result['result'] = ($succes) ? "0" : "1";
         $result['msg'] = $msg;
         return $this->redirectIfError($result);
