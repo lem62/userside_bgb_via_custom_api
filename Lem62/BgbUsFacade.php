@@ -1,5 +1,7 @@
 <?php
 
+error_reporting(E_ALL); ini_set('display_errors', 1);
+
 require __DIR__ . '/Log/LogFile.php';
 require __DIR__ . '/Traits/CustomDotEnv.php';
 require __DIR__ . '/Traits/OutputFormat.php';
@@ -50,6 +52,7 @@ class BgbUsFacade
     private $tariffListId = 25;
     private $storageId = 16;
     private $redirectUrl = null;
+    /*
     private $statusNewCustomer = [
         'get_contract' => 16,
         'add_equipment' => 17,
@@ -58,6 +61,16 @@ class BgbUsFacade
         'cancel' => 11,
         'finish' => 12,
     ];
+    */
+    private $statusNewCustomer = [
+        'get_contract' => 15,
+        'add_equipment' => 3,
+        'apply_equipmnet' => 16,
+        'equipmnet_applied' => 18,
+        'cancel' => 11,
+        'finish' => 12,
+    ];
+    private $registrationTypes = [26,28];
 
     public function __construct()
     {
@@ -128,6 +141,10 @@ class BgbUsFacade
                 }
                 return $this->removeEquipmentInTask($eventArray['taskId']);
             case $this->statusNewCustomer['finish']: // Выполнено
+                $taskType = $this->getTaskType($eventArray['taskId']);
+                if (!in_array($taskType, $this->registrationTypes)) {
+                    break;
+                }
                 if (!isset($eventArray['stateCurrendId'])) {
                     return $this->response(false, "Завершить задачу можно только после регистрации ONU");
                 }
@@ -371,6 +388,25 @@ class BgbUsFacade
             return null;
         }
         return $result;
+    }
+
+    private function getTaskType($taskId) 
+    {
+        $result = -1;
+        $task = $this->getTask($taskId);
+        if (!$task) {
+            $this->log("Can not get task", false);
+            return $result;
+        }
+        if (!property_exists($task->data, "type")) {
+            $this->log("Task does not have type", false);
+            return $result;
+        }
+        if (!property_exists($task->data->type, "id")) {
+            $this->log("Not set task id", false);
+            return $result;
+        }
+        return $task->data->type->id;
     }
 
     private function getBgbGroup($customer) {
