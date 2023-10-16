@@ -56,7 +56,7 @@ class BgbUsFacade
         'apply_equipmnet' => 19,
         'equipmnet_applied' => 18,
         'cancel' => 11,
-        'finish' => 20,
+        'finish' => 12,
     ];
 
     public function __construct()
@@ -288,7 +288,7 @@ class BgbUsFacade
             $this->log($msg, false);
             return $this->response(false, $msg);
         }
-        if (!$this->changeTaskStatus($taskId, $statusNewCustomer['equipmnet_applied'])) { // ONU зарегистрирована
+        if (!$this->changeTaskStatus($taskId, $this->statusNewCustomer['equipmnet_applied'])) { // ONU зарегистрирована
             $this->log("Can no set pre complate status", false);
             return $this->response(false, "Не удалось перевести задачу в статус - ONU зарегистрирована");
         } else {
