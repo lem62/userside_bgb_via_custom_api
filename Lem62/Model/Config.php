@@ -4,6 +4,12 @@ namespace Lem62\Model;
 
 use Lem62\Traits\CustomDotEnv;
 
+/*
+* $configFile дожен возвращать массив - return ['key' => 'value']
+* В $configFile допускается использование $this->dotEnvConfig($key, $defaultValue),
+* для получения значений из Lem62/.env
+*/
+
 class Config
 {
     use CustomDotEnv;
@@ -14,7 +20,7 @@ class Config
     /**
      * @return object
      */
-    public function __construct($configFile, $doException = false)
+    public function __construct($configFile, $doException = true)
     {
         if (file_exists($this->configDir . $configFile . ".php")) {
             $this->config = include $this->configDir . $configFile . ".php";
