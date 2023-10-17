@@ -53,8 +53,7 @@
 
 ## История версий
 
-* 0.1
-    * Инициализация
+[CHANGELOG.md](https://github.com/lem62/userside_bgb_via_custom_api/blob/main/CHANGELOG.md)
 
 ## Лицензия
 
