@@ -8,7 +8,7 @@ trait CustomDotEnv
     private $separator = "=";
     private $config = null;
 
-    public function dotEnvConfig($key)
+    public function dotEnvConfig($key, $default = null)
     {
         if ($this->config === null) {
             $_env = file($this->dotEnvFile);
@@ -21,6 +21,6 @@ trait CustomDotEnv
                 }
             }
         }
-        return isset($this->config[$key]) ? $this->config[$key] : null;
+        return isset($this->config[$key]) ? $this->config[$key] : $default;
     }
 }

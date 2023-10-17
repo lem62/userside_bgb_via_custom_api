@@ -1,6 +1,6 @@
 <?php
 
-error_reporting(E_ALL); ini_set('display_errors', 1);
+// error_reporting(E_ALL); ini_set('display_errors', 1);
 
 require __DIR__ . '/Log/LogFile.php';
 require __DIR__ . '/Traits/CustomDotEnv.php';
@@ -52,7 +52,7 @@ class BgbUsFacade
     private $tariffListId = 25;
     private $storageId = 16;
     private $redirectUrl = null;
-    /*
+    private $config = null;
     private $statusNewCustomer = [
         'get_contract' => 16,
         'add_equipment' => 17,
@@ -61,7 +61,7 @@ class BgbUsFacade
         'cancel' => 11,
         'finish' => 12,
     ];
-    */
+    /*
     private $statusNewCustomer = [
         'get_contract' => 15,
         'add_equipment' => 3,
@@ -70,12 +70,14 @@ class BgbUsFacade
         'cancel' => 11,
         'finish' => 12,
     ];
+    */
     private $registrationTypes = [26,28];
 
     public function __construct()
     {
         $this->api = new ApiUserside($this->dotEnvConfig('USERSIDE_API_URL'));
         $this->log = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
+        $this->config = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
     }
     
     public function log($msg, $info = true)
