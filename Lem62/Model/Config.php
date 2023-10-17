@@ -1,10 +1,10 @@
 <?php
 
-namespace Lem62\Traits;
+namespace Lem62\Model;
 
 use Lem62\Traits\CustomDotEnv;
 
-trait Config
+class Config
 {
     use CustomDotEnv;
 
@@ -12,14 +12,17 @@ trait Config
     private $config = null;
 
     /**
-     * @return void
+     * @return object
      */
-    public function setConfig($configFile)
+    public function __construct($configFile, $doException = false)
     {
-        if (!file_exists($this->configDir . $configFile . ".php")) {
-            return;
+        if (file_exists($this->configDir . $configFile . ".php")) {
+            $this->config = include $this->configDir . $configFile . ".php";
+        } else {
+            if ($doException) {
+                throw new \Exception('Can get app config');
+            }
         }
-        $this->config = include $this->configDir . $configFile . ".php";
     }
 
     public function __get($key)
@@ -31,12 +34,11 @@ trait Config
             return $this->config[$key];
         }
     }
-/*
+
     public function __set($key, $value)
     {
         if (array_key_exists($key, $this->config)) {
             $this->config[$key] = $value;
         }
     }
-*/
 }

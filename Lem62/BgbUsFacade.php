@@ -3,7 +3,8 @@
 // error_reporting(E_ALL); ini_set('display_errors', 1);
 
 require __DIR__ . '/Log/LogFile.php';
-require __DIR__ . '/Traits/Config.php';
+require __DIR__ . '/Traits/CustomDotEnv.php';
+require __DIR__ . '/Model/Config.php';
 require __DIR__ . '/Traits/OutputFormat.php';
 require __DIR__ . '/Bgb/Userside/UsersideResponse.php';
 require __DIR__ . '/Bgb/ApiBgb.php';
@@ -24,7 +25,7 @@ require __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
-use Lem62\Traits\Config;
+use Lem62\Model\Config;
 use Lem62\Bgb\Userside\UsersideFacade;
 use Lem62\Bgb\Userside\Command\GetContractNumber;
 use Lem62\Bgb\Userside\Command\AttachGponSerial;
@@ -40,7 +41,7 @@ use Lem62\Userside\Api\Action\Task\ChangeState;
 
 class BgbUsFacade 
 {
-    use OutputFormat, Config;
+    use OutputFormat;
 
     private $debug = true; // log both info and error
     private $command = null;
@@ -56,8 +57,8 @@ class BgbUsFacade
 
     public function __construct()
     {
-        $this->config = $this->setConfig('new_customer');
-        $this->api = new ApiUserside($this->us_api_url);
+        $this->config = new Config('new_customer');
+        $this->api = new ApiUserside($this->config->us_api_url);
         $this->log = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
     }
     
@@ -105,6 +106,7 @@ class BgbUsFacade
         if (!isset($eventArray['stateId'])) {
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
+        print_r($this->config->status);
         if (!in_array($eventArray['stateId'], $this->config->status)) {
             return $this->response(true, "Не подходящий id статуса в массиве из события");
         }
