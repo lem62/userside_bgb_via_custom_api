@@ -3,7 +3,7 @@
 // error_reporting(E_ALL); ini_set('display_errors', 1);
 
 require __DIR__ . '/Log/LogFile.php';
-require __DIR__ . '/Traits/CustomDotEnv.php';
+require __DIR__ . '/Traits/Config.php';
 require __DIR__ . '/Traits/OutputFormat.php';
 require __DIR__ . '/Bgb/Userside/UsersideResponse.php';
 require __DIR__ . '/Bgb/ApiBgb.php';
@@ -23,8 +23,8 @@ require __DIR__ . '/Userside/Api/Action/Task/Show.php';
 require __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
 
 use Lem62\Log\LogFile;
-use Lem62\Traits\CustomDotEnv;
 use Lem62\Traits\OutputFormat;
+use Lem62\Traits\Config;
 use Lem62\Bgb\Userside\UsersideFacade;
 use Lem62\Bgb\Userside\Command\GetContractNumber;
 use Lem62\Bgb\Userside\Command\AttachGponSerial;
@@ -40,7 +40,7 @@ use Lem62\Userside\Api\Action\Task\ChangeState;
 
 class BgbUsFacade 
 {
-    use OutputFormat, CustomDotEnv;
+    use OutputFormat, Config;
 
     private $debug = true; // log both info and error
     private $command = null;
@@ -48,36 +48,17 @@ class BgbUsFacade
     private $log = null;
     private $api = null;
     private $logPrefix = null;
-    private $onuSectionId = 9;
-    private $tariffListId = 25;
-    private $storageId = 16;
     private $redirectUrl = null;
+     /**
+     * @var object $config
+     */
     private $config = null;
-    private $statusNewCustomer = [
-        'get_contract' => 16,
-        'add_equipment' => 17,
-        'apply_equipmnet' => 19,
-        'equipmnet_applied' => 18,
-        'cancel' => 11,
-        'finish' => 12,
-    ];
-    /*
-    private $statusNewCustomer = [
-        'get_contract' => 15,
-        'add_equipment' => 3,
-        'apply_equipmnet' => 16,
-        'equipmnet_applied' => 18,
-        'cancel' => 11,
-        'finish' => 12,
-    ];
-    */
-    private $registrationTypes = [26,28];
 
     public function __construct()
     {
-        $this->api = new ApiUserside($this->dotEnvConfig('USERSIDE_API_URL'));
+        $this->config = $this->setConfig('new_customer');
+        $this->api = new ApiUserside($this->us_api_url);
         $this->log = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
-        $this->config = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
     }
     
     public function log($msg, $info = true)
@@ -124,33 +105,33 @@ class BgbUsFacade
         if (!isset($eventArray['stateId'])) {
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
-        if (!in_array($eventArray['stateId'], $this->statusNewCustomer)) {
+        if (!in_array($eventArray['stateId'], $this->config->status)) {
             return $this->response(true, "Не подходящий id статуса в массиве из события");
         }
         $this->log("Event array - " . $this->arrayToString($eventArray, true));
         $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
         switch ($eventArray['stateId']) {
-            case $this->statusNewCustomer['get_contract']: // Получение номера договора
+            case $this->config->status['get_contract']: // Получение номера договора
                 return $this->getContractNumber($eventArray['taskId'], $eventArray['customerId']);
-            case $this->statusNewCustomer['apply_equipmnet']: // Регистрация Ону
+            case $this->config->status['apply_equipmnet']: // Регистрация Ону
                 return $this->attachGponSerial($eventArray['taskId'], $eventArray['customerId']);
-            case $this->statusNewCustomer['cancel']: // Отмена предыдущего статуса
+            case $this->config->status['cancel']: // Отмена предыдущего статуса
                 if (!isset($eventArray['stateCurrendId'])) {
                     break;
                 }
-                if ($eventArray['stateCurrendId'] != $this->statusNewCustomer['add_equipment']) { // ТМЦ
+                if ($eventArray['stateCurrendId'] != $this->config->status['add_equipment']) { // ТМЦ
                     break;
                 }
                 return $this->removeEquipmentInTask($eventArray['taskId']);
-            case $this->statusNewCustomer['finish']: // Выполнено
+            case $this->config->status['finish']: // Выполнено
                 $taskType = $this->getTaskType($eventArray['taskId']);
-                if (!in_array($taskType, $this->registrationTypes)) {
+                if (!in_array($taskType, $this->config->task_type)) {
                     break;
                 }
                 if (!isset($eventArray['stateCurrendId'])) {
                     return $this->response(false, "Завершить задачу можно только после регистрации ONU");
                 }
-                if ($eventArray['stateCurrendId'] != $this->statusNewCustomer['equipmnet_applied']) { // Ону зарегистрирована
+                if ($eventArray['stateCurrendId'] != $this->config->status['equipmnet_applied']) { // Ону зарегистрирована
                     return $this->response(false, "Завершить задачу можно только после регистрации ONU");
                 }
                 $this->switchToRegular($eventArray['customerId']);
@@ -174,15 +155,15 @@ class BgbUsFacade
         if (!isset($eventArray['stateId'])) {
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
-        if (!in_array($eventArray['stateId'], $this->statusNewCustomer)) {
+        if (!in_array($eventArray['stateId'], $this->config->status)) {
             return $this->response(true, "Не подходящий id статуса в массиве из события");
         }
         $this->log("Event array - " . $this->arrayToString($eventArray, true));
         $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
         switch ($eventArray['stateId']) {
-            case $this->statusNewCustomer['get_contract']: // Получение номера договора
+            case $this->config->status['get_contract']: // Получение номера договора
                 return $this->response(false, "Номер договора выделен");
-            case $this->statusNewCustomer['apply_equipmnet']: // Регистрация Ону
+            case $this->config->status['apply_equipmnet']: // Регистрация Ону
                 return $this->response(false, "ONU зарегистрирована");
         }
         return $this->response(true, "Обработано");
@@ -307,7 +288,7 @@ class BgbUsFacade
             $this->log($msg, false);
             return $this->response(false, $msg);
         }
-        if (!$this->changeTaskStatus($taskId, $this->statusNewCustomer['equipmnet_applied'])) { // ONU зарегистрирована
+        if (!$this->changeTaskStatus($taskId, $this->config->status['equipmnet_applied'])) { // ONU зарегистрирована
             $this->log("Can no set pre complate status", false);
             return $this->response(false, "Не удалось перевести задачу в статус - ONU зарегистрирована");
         } else {
@@ -380,7 +361,7 @@ class BgbUsFacade
             if (!property_exists($value, "value")) {
                 continue;
             }
-            if ($value->id != $this->tariffListId) {
+            if ($value->id != $this->config->tariff_list_id) {
                 continue;
             }
             $result = $value->value;
@@ -469,7 +450,7 @@ class BgbUsFacade
     {
         $request = new GetInventoryAmount();
         $request->location = "customer";
-        $request->section_id = $this->onuSectionId;
+        $request->section_id = $this->config->onu_section_id;
         $request->object_id = $customerId;
         return $this->stringToJson($this->command($request));
     }
@@ -525,11 +506,11 @@ class BgbUsFacade
     {
         /*
         * Мы не реализуем удаление серийного, они возобновляемые.
-        * Возвращаем их на склад ($this->storageId)
+        * Возвращаем их на склад ($this->config->storage_id)
         */
         $request = new TransferInventory();
         $request->inventory_id = $invId;
-        $request->dst_account = "2040300000" . $this->storageId;
+        $request->dst_account = "2040300000" . $this->config->storage_id;
         return $this->stringToJson($this->command($request));
     }
 

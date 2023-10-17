@@ -13,6 +13,9 @@ trait CustomDotEnv
         if ($this->config === null) {
             $_env = file($this->dotEnvFile);
             foreach ($_env as $value) {
+                if (preg_match("/^(#.*|\s+|)$/", $value)) {
+                    continue;
+                }
                 preg_match("/^(.*?)" . $this->separator . "(.*)/", $value, $value);
                 if (count($value) == 3) {
                     $value[1] = preg_replace("/(^[\'\"]|[\'\"]$)/", "", trim($value[1]));
