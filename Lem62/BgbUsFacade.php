@@ -50,9 +50,9 @@ class BgbUsFacade
     private $api = null;
     private $logPrefix = null;
     private $redirectUrl = null;
-     /**
-     * @var object $config
-     */
+    /**
+    * @var object $config
+    */
     private $config = null;
 
     public function __construct()

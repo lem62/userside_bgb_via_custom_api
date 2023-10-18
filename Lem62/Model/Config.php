@@ -26,7 +26,7 @@ class Config
             $this->config = include $this->configDir . $configFile . ".php";
         } else {
             if ($doException) {
-                throw new \Exception('Can get app config');
+                throw new \Exception('Can get app config ' . $configFile);
             }
         }
     }

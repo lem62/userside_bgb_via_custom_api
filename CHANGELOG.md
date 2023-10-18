@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+
+## [Unreleased] - 2023-10-17
+ 
+Добавление фасада синхронизации ONU
+ 
+### Добавлено
+
+*+Bgb/Db/MysqlDb* — Объект для взаимодействия с БД биллинга.
+
+ 
+### Изменено
+
+*Model/Config* — В исключение включает название конфиг-фаила.
+
+ 
 ## [0.1.2] - 2023-10-17
  
 Выносим состояния в отельный объект Config.
@@ -50,5 +65,3 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 *-BgbUsFacade->attachGponSerial*
 
 *-BgbUsFacade->switchToRegular*
- 
-### Исправлено
