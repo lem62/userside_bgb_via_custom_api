@@ -5,10 +5,18 @@ namespace Lem62\Userside\Api;
 class ApiUserside
 {
     private $usersideApiUrl = null;
+    private $connetionTimeout = 3; // seconds
+    private $timeout = 5; // seconds
 
-    public function __construct($url)
+    public function __construct($url, $timeout = 5)
     {
         $this->usersideApiUrl = $url;
+        $this->timeout = $timeout;
+    }
+
+    public function __destruct()
+    {
+        $this->usersideApiUrl = null;
     }
 
     function get($url)
@@ -23,7 +31,7 @@ class ApiUserside
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 3);
-        curl_setopt($curl, CURLOPT_TIMEOUT, 5);
+        curl_setopt($curl, CURLOPT_TIMEOUT, $this->timeout);
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, 0);
         curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
         $result = curl_exec($curl);

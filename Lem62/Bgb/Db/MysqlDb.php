@@ -40,6 +40,16 @@ class MysqlDb
         return $this->db;
     }
 
+    public function get()
+    {
+        return $this->db;
+    }
+
+    public function fetch($query)
+    {
+        return $this->db->query($query)->fetch(\PDO::FETCH_ASSOC);
+    }
+
     public function fetchAll($query)
     {
         return $this->db->query($query)->fetchAll(\PDO::FETCH_ASSOC);

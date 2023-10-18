@@ -31,6 +31,11 @@ class Config
         }
     }
 
+    public function __destruct()
+    {
+        $this->config = null;
+    }
+
     public function __get($key)
     {
         if ($this->config === null) {

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ### Добавлено
 
+*+SyncOnuFacade* — Фасад реализует синхронизацию ONU с биллингом. В настоящий момент одно направлено - из биллинга в юзерсайд
 *+Bgb/Db/MysqlDb* — Объект для взаимодействия с БД биллинга.
 
  

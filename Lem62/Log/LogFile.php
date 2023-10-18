@@ -18,6 +18,13 @@ class LogFile {
         }
     }
 
+    public function __destruct()
+    {
+        $this->logPath = null;
+        $this->logFile = null;
+        $this->logDt = null;
+    }
+
     /* TRACE, DEBUG, INFO, WARN, ERROR, FATAL */
     
     public function info($msg) {
