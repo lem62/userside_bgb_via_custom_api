@@ -2,7 +2,8 @@
 
 namespace Lem62\Traits;
 
-trait OutputFormat {
+trait OutputFormat 
+{
 
     public function arrayToString($array, $trimSpace = false)
     {

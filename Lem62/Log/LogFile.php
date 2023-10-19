@@ -2,13 +2,15 @@
 
 namespace Lem62\Log;
 
-class LogFile {
+class LogFile
+{
 
     private $logDt = null;
     private $logPath = './';
     private $logFile = 'log.txt';
 
-    public function __construct($logPath, $logFile) {
+    public function __construct($logPath, $logFile)
+    {
         if ($logPath) {
             $this->logPath = $logPath;
         }
@@ -27,19 +29,28 @@ class LogFile {
 
     /* TRACE, DEBUG, INFO, WARN, ERROR, FATAL */
     
-    public function info($msg) {
+    public function info($msg)
+    {
         $this->write($msg, "INFO");
     }
 
-    public function error($msg) {
+    public function error($msg)
+    {
         $this->write($msg, "ERROR");
     }
 
-    public function warn($msg) {
+    public function warn($msg)
+    {
         $this->write($msg, "WARN");
     }
 
-    private function write($msg, $pref) {
+    public function exception($msg)
+    {
+        $this->write($msg, "EXCEPTION");
+    }
+
+    private function write($msg, $pref)
+    {
         if (empty($msg)) {
             return;
         }
