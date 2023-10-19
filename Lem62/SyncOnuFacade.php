@@ -65,8 +65,8 @@ class SyncOnuFacade
     public function __construct(bool $fullSync)
     {
         date_default_timezone_set('Asia/Bishkek');
-        $this->log = new LogFile($this->logPath, "sync_onu");
         set_exception_handler([$this, 'exceptionHandler']);
+        $this->log = new LogFile($this->logPath, "sync_onu");
         $this->checkLock();
         $this->logPrefix = "construct";
         if ($this->isLock) {
@@ -130,13 +130,16 @@ class SyncOnuFacade
                     ? $this->onuModels[$v['model']]
                     : $this->config->default_onu_model_id;
                 $newOnuId = $this->addOnu($v['sn'], $modelId);
-                $this->moveOnuOnCustomer($v['customer_id'], $newOnuId);
+                $this->moveOnuCustomer($v['customer_id'], $newOnuId);
             } else {
                 if ($v['model'] != $v['onu']['model']) {
                     $this->log("Not equal ONU models", false);
                     $this->log($v, false);
                 }
-                // if ($v['onu']['location'])
+                if ($v['customer_id'] == $v['onu']['customer_id']) {
+                    continue;
+                }
+                $this->moveOnuCustomer($v['customer_id'], $v['onu']['id']);
             }
         }
 
@@ -154,28 +157,12 @@ class SyncOnuFacade
         $this->filePutContent($this->logPath . $this->lockFile, (time()-($this->lockExpirePeriod-180)));
         if (!$this->log) {
             throw $e;
-            return;
         }
         $this->log->exception("Message - " . $e->getMessage());
         $this->log->exception("Trace -\n" . $e->getTraceAsString());
         throw $e;
     }
       
-    private function checkLock()
-    {
-        $lockFile = $this->fileGetContent($this->logPath . $this->lockFile);
-        if (!$lockFile) {
-            return;
-        }
-        $timeDiff = time() - (int)$lockFile;
-        if ($timeDiff > $this->lockExpirePeriod) {
-            $this->fileRemove($this->logPath . $this->lockFile);
-            $this->log->info("Lock file expired. Try to remove it");
-            return;
-        }
-        $this->isLock = true;
-    }
-
     private function syncOnuModels()
     {
         $this->logPrefix = "syncOnuModels";        
@@ -273,7 +260,7 @@ class SyncOnuFacade
     /*
     * Userside
     */
-    public function getOnuModels() 
+    private function getOnuModels() 
     {
         $request = new GetInventoryCatalog();
         $request->section_id = $this->config->onu_section_id;
@@ -351,6 +338,22 @@ class SyncOnuFacade
         return $response['id'];
     }
 
+    private function moveOnuCustomer($customerId, $onuId)
+    {
+        $request = new TransferInventory();
+        $request->inventoryId = $onuId;
+        $request->dstAccount = $this->getCidForTransfer($customerId);
+        return ($this->command($request)) ? true : false;
+    }
+
+    private function moveOnuStorage($onuId)
+    {
+        $request = new TransferInventory();
+        $request->inventory_id = $onuId;
+        $request->dst_account = "2040300000" . $this->config->storage_id;
+        return ($this->command($request)) ? true : false;
+    }
+
     private function getOnuArray($location)
     {
         $serials = $this->getOnus($location);
@@ -378,39 +381,6 @@ class SyncOnuFacade
         $request->location = $location;
         $request->section_id = $this->config->onu_section_id;
         return $this->command($request);
-    }
-
-    private function getSerialFromCustomer($customerId) 
-    {
-        $request = new GetInventoryAmount();
-        $request->location = "customer";
-        $request->section_id = $this->config->onu_section_id;
-        $request->object_id = $customerId;
-        return $this->stringToJson($this->command($request));
-    }
-
-    private function moveOnuOnCustomer($customerId, $onuId)
-    {
-        $request = new TransferInventory();
-        $request->inventoryId = $onuId;
-        $request->dstAccount = $this->getCidForTransfer($customerId);
-        $response = $this->command($request);
-        if (!$response) {
-            return false;
-        }
-        return true;
-    }
-
-    private function removeEquipmentCommand($invId)
-    {
-        /*
-        * Мы не реализуем удаление серийного, они возобновляемые.
-        * Возвращаем их на склад ($this->config->storage_id)
-        */
-        $request = new TransferInventory();
-        $request->inventory_id = $invId;
-        $request->dst_account = "2040300000" . $this->config->storage_id;
-        return $this->stringToJson($this->command($request));
     }
 
     private function command(ApiRequest $request)
@@ -496,5 +466,20 @@ class SyncOnuFacade
         } else {
             $this->log->error($msg);
         }
+    }
+
+    private function checkLock()
+    {
+        $lockFile = $this->fileGetContent($this->logPath . $this->lockFile);
+        if (!$lockFile) {
+            return;
+        }
+        $timeDiff = time() - (int)$lockFile;
+        if ($timeDiff > $this->lockExpirePeriod) {
+            $this->fileRemove($this->logPath . $this->lockFile);
+            $this->log->info("Lock file expired. Try to remove it");
+            return;
+        }
+        $this->isLock = true;
     }
 }
