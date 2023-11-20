@@ -22,6 +22,7 @@ require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
 require __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
 require __DIR__ . '/Userside/Api/Action/Task/Show.php';
 require __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
+require __DIR__ . '/Userside/Api/Action/Employee/GetData.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
@@ -38,6 +39,7 @@ use Lem62\Userside\Api\Action\Inventory\GetInventoryAmount;
 use Lem62\Userside\Api\Action\Inventory\TransferInventory;
 use Lem62\Userside\Api\Action\Task\Show;
 use Lem62\Userside\Api\Action\Task\ChangeState;
+use Lem62\Userside\Api\Action\Employee\GetData as GetEmployeeData;
 
 class BgbUsFacade 
 {
@@ -470,6 +472,17 @@ class BgbUsFacade
         $request = new GetData();
         $request->customer_id = $customerId;
         return $this->stringToJson($this->command($request));
+    }
+
+    private function getEmployeeName($employeeId) 
+    {
+        $request = new GetEmployeeData();
+        $request->id = $employeeId;
+        $response = $this->command($request);
+        if (!$response || !isset($response['data']) || !isset($response['data'][$employeeId])) {
+            return null;
+        }
+        return $response['data'][$employeeId]['name'];
     }
 
     private function getTask($taskId) 
