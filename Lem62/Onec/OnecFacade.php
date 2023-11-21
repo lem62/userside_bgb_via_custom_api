@@ -37,14 +37,14 @@ class OnecFacade
         $this->command->prepare($data);
     }
     
-    public function perform() : QueryResponse
+    public function perform()
     {
         if ($this->command === null) {
             $this->log("perform: Null command", false);
             return;
         }
-        $this->log("perform: Request - " . $this->command::class, true);
-        $result = $this->api->get($this->command->getUrl());
+        $this->log("perform: Request - " . $this->arrayToString($this->command, true), true);
+        $result = $this->api->postJson($this->command->getJsonString());
         $this->log("perform: Response (bgb) - " . $this->arrayToString($result), true);
 
         return $this->response;
@@ -53,6 +53,7 @@ class OnecFacade
     private function log($msg, $info = true)
     {
         if ($this->log === null) {
+            echo $msg . "\n\n";
             return;
         }
         if ($info && !$this->debug) {

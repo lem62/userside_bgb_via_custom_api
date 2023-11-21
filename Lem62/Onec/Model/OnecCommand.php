@@ -7,21 +7,16 @@ use Lem62\Model\QueryJson;
 class OnecCommand extends QueryJson
 {
 
-    protected function getJsonString() : string 
+    public function getJsonString() : string 
     {
-        $result = "";
-        if ($this->data === null) {
-            return $result;
+        return json_encode($this->data);
+    }
+
+    protected function returnKey($value) 
+    {
+        if (!isset($value)) {
+            return null;
         }
-        if (!is_array($this->data)) {
-            return $result;
-        }
-        foreach ($this->data as $key => $value) {
-            if ($value === null) {
-                continue;
-            }
-            $result .= "&" . $key . "=" . urlencode($value);
-        }
-        return $result;
+        return $value;
     }
 }
