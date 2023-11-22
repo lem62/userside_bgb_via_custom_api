@@ -37,16 +37,28 @@ class OnecFacade
         $this->command->prepare($data);
     }
     
-    public function perform()
+    public function perform() : QueryResponse
     {
         if ($this->command === null) {
             $this->log("perform: Null command", false);
-            return;
+            $this->response->message = "Null command";
+            return $this->response;
         }
         $this->log("perform: Request - " . $this->arrayToString($this->command, true), true);
         $result = $this->api->postJson($this->command->getJsonString());
-        $this->log("perform: Response (bgb) - " . $this->arrayToString($result), true);
-
+        $this->log("perform: Response (onec) - " . $result, true);
+        if (!$result) {
+            $this->log("perform: Can not get response", false);
+            $this->response->message = "Can not get response";
+            return $this->response;
+        }
+        $result = $this->stringToJson($result);
+        $this->response->result = property_exists($result, "success")
+            ? $result->success
+            : false;
+        $this->response->message = property_exists($result, "response")
+            ? $result->response
+            : null;
         return $this->response;
     }
 

@@ -10,12 +10,10 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
         case "task_state_change_before":
             $bgbUsFacade = new BgbUsFacade();
             return $bgbUsFacade->registrationNewCustomer($arg1);
-            break;
 
         case "task_state_change":
             $bgbUsFacade = new BgbUsFacade();
             return $bgbUsFacade->registrationNewCustomerAfter($arg1);
-            break;
     }
     return true;
 }

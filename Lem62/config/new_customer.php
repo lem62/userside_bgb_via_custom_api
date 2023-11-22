@@ -2,7 +2,7 @@
 
 /**
  * @var Lem62\Traits\CustomDotEnv $this
-*/
+ */
 
 return [
     'debug' => $this->dotEnvConfig('DEBUG', true),

@@ -12,15 +12,15 @@ class NewCustomerData extends OnecCommand implements OnecApiRequest
     
     public function prepare($data)
     {
-        if (!isset($data['data'])) {
-            return;
-        }
         if (!isset($data['type'])) {
             return;
         }
         $result = null;
         switch ($data['type']) {
             case 'customer':
+                if (!isset($data['data'])) {
+                    break;
+                }
                 $result['id'] = $this->returnKey($data['data']['id']);
                 $result['name'] = $this->returnKey($data['data']['full_name']);
                 $result['manager'] = $this->returnKey($data['data']['manager_id']);
