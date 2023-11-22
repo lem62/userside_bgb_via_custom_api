@@ -2,11 +2,13 @@
 
 // error_reporting(E_ALL); ini_set('display_errors', 1);
 
-require '/home/ldb/php/userside_bgb_via_custom_api/Lem62/BgbUsFacade.php';
+require_once '/home/ldb/php/userside_bgb_via_custom_api/Lem62/BgbUsFacade.php';
+require_once '/home/ldb/php/userside_bgb_via_custom_api/Lem62/EquipmentOnecFacade.php';
 
 function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, $arg5 = 0) {
     // pl($apiFunction . " " . argToString($arg1, $arg2, $arg3, $arg4, $arg5) . "\n");
     switch ($apiFunction) {
+        
         case "task_state_change_before":
             $bgbUsFacade = new BgbUsFacade();
             return $bgbUsFacade->registrationNewCustomer($arg1);
@@ -14,6 +16,11 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
         case "task_state_change":
             $bgbUsFacade = new BgbUsFacade();
             return $bgbUsFacade->registrationNewCustomerAfter($arg1);
+
+        case "inventory_transfer":
+            $equipmentOnecFacade = new EquipmentOnecFacade();
+            $equipmentOnecFacade->sendEquipment($arg1);
+            break;
     }
     return true;
 }
