@@ -56,6 +56,7 @@ class BgbUsFacade
     * @var object $config
     */
     private $config = null;
+    private $supervisor = [184,59];
 
     public function __construct()
     {
@@ -130,6 +131,9 @@ class BgbUsFacade
             case $this->config->status['finish']: // Выполнено
                 $taskType = $this->getTaskType($eventArray['taskId']);
                 if (!in_array($taskType, $this->config->task_type)) {
+                    break;
+                }
+                if (in_array($eventArray['employee_id'], $this->supervisor)) {
                     break;
                 }
                 if (!isset($eventArray['stateCurrendId'])) {

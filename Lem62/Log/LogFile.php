@@ -7,7 +7,7 @@ class LogFile
 
     private $logDt = null;
     private $logPath = './';
-    private $logFile = 'log.txt';
+    private $logFile = 'log_file';
 
     public function __construct($logPath, $logFile)
     {
@@ -16,7 +16,7 @@ class LogFile
         }
         if ($logFile) {
             $this->logDt = date('_Y_m');
-            $this->logFile = $logFile . $this->logDt . '.txt';
+            $this->logFile = $logFile . $this->logDt . '.log';
         }
     }
 
