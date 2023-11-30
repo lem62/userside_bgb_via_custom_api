@@ -2,27 +2,28 @@
 
 // error_reporting(E_ALL); ini_set('display_errors', 1);
 
-require __DIR__ . '/Log/LogFile.php';
-require __DIR__ . '/Traits/CustomDotEnv.php';
-require __DIR__ . '/Model/Config.php';
-require __DIR__ . '/Traits/OutputFormat.php';
-require __DIR__ . '/Bgb/Userside/UsersideResponse.php';
-require __DIR__ . '/Bgb/ApiBgb.php';
-require __DIR__ . '/Bgb/Model/ApiRequest.php';
-require __DIR__ . '/Bgb/Userside/UsersideFacade.php';
-require __DIR__ . '/Bgb/Userside/Command/GetContractNumber.php';
-require __DIR__ . '/Bgb/Userside/Command/AttachGponSerial.php';
-require __DIR__ . '/Userside/Api/ApiUserside.php';
-require __DIR__ . '/Userside/Api/Model/ApiRequest.php';
-require __DIR__ . '/Userside/Api/Model/UsersideAction.php';
-require __DIR__ . '/Userside/Api/Action/Customer/GetData.php';
-require __DIR__ . '/Userside/Api/Action/Customer/Edit.php';
-require __DIR__ . '/Userside/Api/Action/Customer/ChangeBilling.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
-require __DIR__ . '/Userside/Api/Action/Task/Show.php';
-require __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
-require __DIR__ . '/Userside/Api/Action/Employee/GetData.php';
+require_once __DIR__ . '/Log/LogFile.php';
+require_once __DIR__ . '/Traits/CustomDotEnv.php';
+require_once __DIR__ . '/Model/Config.php';
+require_once __DIR__ . '/Traits/OutputFormat.php';
+require_once __DIR__ . '/Bgb/Userside/UsersideResponse.php';
+require_once __DIR__ . '/Bgb/ApiBgb.php';
+require_once __DIR__ . '/Bgb/Model/ApiRequest.php';
+require_once __DIR__ . '/Bgb/Model/UsersideCommand.php';
+require_once __DIR__ . '/Bgb/Userside/UsersideFacade.php';
+require_once __DIR__ . '/Bgb/Userside/Command/GetContractNumber.php';
+require_once __DIR__ . '/Bgb/Userside/Command/AttachGponSerial.php';
+require_once __DIR__ . '/Userside/Api/ApiUserside.php';
+require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
+require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
+require_once __DIR__ . '/Userside/Api/Action/Customer/GetData.php';
+require_once __DIR__ . '/Userside/Api/Action/Customer/Edit.php';
+require_once __DIR__ . '/Userside/Api/Action/Customer/ChangeBilling.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
+require_once __DIR__ . '/Userside/Api/Action/Task/Show.php';
+require_once __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
+require_once __DIR__ . '/Userside/Api/Action/Employee/GetData.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
@@ -109,7 +110,6 @@ class BgbUsFacade
         if (!isset($eventArray['stateId'])) {
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
-        print_r($this->config->status);
         if (!in_array($eventArray['stateId'], $this->config->status)) {
             return $this->response(true, "Не подходящий id статуса в массиве из события");
         }
@@ -177,21 +177,34 @@ class BgbUsFacade
         return $this->response(true, "Обработано");
     }
 
-    private function getContractNumber($taskId, $customerId) 
+    public function getContractNumber($taskId, $customerId) 
     {
         $this->setLogPrefix("getContractNumber");
         $customer = $this->getCustomerData($customerId);
+        $task = $this->getTask($taskId);
         if (!$customer) {
             $this->log("Can not get customer by id: " . $customerId, false);
             return $this->response(false, "Не удалось найти абонента");
         }
+        if (!$task) {
+            $this->log("Can not get task by id: " . $taskId, false);
+            return $this->response(false, "Не удалось получить сведения о задании");
+        }
         if (!property_exists($customer, "data")) {
-            $this->log("No data property", false);
-            return $this->response(false, "Нет данных");
+            $this->log("No data property for customer", false);
+            return $this->response(false, "Нет данных об абоненте");
+        }
+        if (!isset($task['data'])) {
+            $this->log("No data for task", false);
+            return $this->response(false, "Нет данных о задании");
         }
         if ($customer->data->is_potential !== 1) {
             $this->log("Customer is not potential", false);
             return $this->response(false, "Абонент не потенциальный");
+        }
+        if (!isset($task['data']['staff'])) {
+            $this->log("Can not get curator", false);
+            return $this->response(false, "Не удалось получить куратора в задании");
         }
         if (!property_exists($customer->data, "full_name")) {
             $this->log("Can not get full name", false);
@@ -200,6 +213,10 @@ class BgbUsFacade
         if (!property_exists($customer->data, "group")) {
             $this->log("Can not get group", false);
             return $this->response(false, "Не удалось получить группу");
+        }
+        if (!property_exists($customer->data, "phone")) {
+            $this->log("Can not get group", false);
+            return $this->response(false, "Не удалось получить телефоны");
         }
         if (property_exists($customer->data, "agreement")) {
             if (count($customer->data->agreement) == 0) {
@@ -212,10 +229,27 @@ class BgbUsFacade
                 return $this->response(false, "Номер договора уже присвоин");
             }
         }
-        $customerData["customerId"] = $customerId;
+        $phones = $this->getAllInObject($customer->data->phone, "number", ",");
+        $address = $this->getByIndexInObject(
+            $customer->data->additional_data, 
+            $this->config->extra_field['address'], 
+            "value"
+        );
+        $curator = $this->getFirstInArray($task['data']['staff']['employee'], null);
+        $curator = $this->getEmployeeName($curator);
+        $extra_catv = $this->getByIndexInArray(
+            $task['data']['additional_data'], 
+            $this->config->extra_field['catv'], 
+            "value"
+        );
+        $customerData["customer_id"] = $customerId;
         $customerData["name"] = $customer->data->full_name;
         $customerData["group"] = $this->getBgbGroup($customer);
         $customerData["tariff"] = $this->getTariffForBgb($taskId);
+        $customerData["phone"] = $phones;
+        $customerData["address"] = $address;
+        $customerData["curator"] = $curator;
+        $customerData["extra_catv"] = $extra_catv;
         $this->setCommand("get_contract_number");
         $this->setData($customerData);
         $json = $this->execute();
@@ -353,6 +387,60 @@ class BgbUsFacade
         }
     }
 
+    private function getAllInObject($object, $property, $separator)
+    {
+        $result = "";
+        foreach ($object as $key => $value) {
+            if (!property_exists($value, $property)) {
+                continue;
+            }
+            $result .= $value->$property . $separator;
+        }
+        $result = preg_replace("/$separator$/", "", $result);
+        $result = (strlen($result) == 0) ? null : $result;
+        return $result;
+    }
+
+    private function getByIndexInObject($object, $index, $property)
+    {
+        $result = null;
+        foreach ($object as $key => $value) {
+            if ($key != $index) {
+                continue;
+            }
+            if (!property_exists($value, $property)) {
+                continue;
+            }
+            $result = $value->$property;
+        }
+        return $result;
+    }
+
+    private function getFirstInArray($array, $index)
+    {
+        foreach ($array as $key => $value) {
+            if ($index !== null && !isset($value[$index])) {
+                continue;
+            }
+            return ($index === null) ? $value : $value[$index];
+        }
+        return null;
+    }
+
+    private function getByIndexInArray($object, $index, $value)
+    {
+        foreach ($object as $k => $v) {
+            if ($k != $index) {
+                continue;
+            }
+            if ($value !== null && !isset($v[$value])) {
+                continue;
+            }
+            return ($value === null) ? $v : $v[$value];
+        }
+        return null;
+    }
+
     private function getTariffForBgb($taskId) 
     {
         $result = null;
@@ -361,18 +449,18 @@ class BgbUsFacade
             $this->log("Can not get task", false);
             return $result;
         }
-        if (!property_exists($task->data, "additional_data")) {
+        if (!isset($task['data']['additional_data'])) {
             $this->log("Task does not have tariff list", false);
             return $result;
         }
-        foreach ($task->data->additional_data as $key => $value) {
-            if (!property_exists($value, "value")) {
+        foreach ($task['data']['additional_data'] as $key => $value) {
+            if (!isset($value['value'])) {
                 continue;
             }
-            if ($value->id != $this->config->tariff_list_id) {
+            if ($value['id'] != $this->config->tariff_list_id) {
                 continue;
             }
-            $result = $value->value;
+            $result = $value['value'];
             break;
         }
         if (!$result) {
@@ -389,15 +477,15 @@ class BgbUsFacade
             $this->log("Can not get task", false);
             return $result;
         }
-        if (!property_exists($task->data, "type")) {
+        if (!isset($task['data']['type'])) {
             $this->log("Task does not have type", false);
             return $result;
         }
-        if (!property_exists($task->data->type, "id")) {
+        if (!isset($task['data']['type']['id'])) {
             $this->log("Not set task id", false);
             return $result;
         }
-        return $task->data->type->id;
+        return $task['data']['type']['id'];
     }
 
     private function getBgbGroup($customer) {
@@ -493,7 +581,7 @@ class BgbUsFacade
     {
         $request = new Show();
         $request->id = $taskId;
-        return $this->stringToJson($this->command($request));
+        return $this->command($request);
     }
 
     private function setContractNumber($customerId, $title) 

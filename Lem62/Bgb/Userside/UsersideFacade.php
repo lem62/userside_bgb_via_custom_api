@@ -50,8 +50,9 @@ class UsersideFacade
     
     public function perform() : UsersideResponse
     {
-        $this->log->info("Request - " . $this->command->getUrl());
-        $result = $this->api->get($this->command->getUrl());
+        $query = $this->command->getUrl();
+        $this->log->info("Request - " . $query);
+        $result = $this->api->get($query);
         $this->log->info("Response (bgb) - " . $this->arrayToString($result));
         /*
         * Не получили ответ от биллинга

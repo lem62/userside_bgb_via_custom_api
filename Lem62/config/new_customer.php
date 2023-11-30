@@ -20,4 +20,8 @@ return [
     'onu_section_id' => 9,
     'tariff_list_id' => 25,
     'storage_id' => 16,
+    'extra_field' => [
+        'address' => $this->dotEnvConfig('EF_ADDRESS', 42),
+        'catv' => $this->dotEnvConfig('EF_CATV',59),
+    ],
 ];
