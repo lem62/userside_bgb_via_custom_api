@@ -314,7 +314,7 @@ class BgbUsFacade
             return $this->response(false, "Серийный имеет неверный формат");
         }
         $serial["gpon_serial"] = $gponSerial;
-        $serial["customerId"] = $customerId;
+        $serial["customer_id"] = $customerId;
         $this->setCommand("attach_gpon_serial");
         $this->setData($serial);
         $json = $this->execute();
