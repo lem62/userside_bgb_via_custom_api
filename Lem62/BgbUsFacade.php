@@ -177,7 +177,7 @@ class BgbUsFacade
         return $this->response(true, "Обработано");
     }
 
-    public function getContractNumber($taskId, $customerId) 
+    private function getContractNumber($taskId, $customerId) 
     {
         $this->setLogPrefix("getContractNumber");
         $customer = $this->getCustomerData($customerId);

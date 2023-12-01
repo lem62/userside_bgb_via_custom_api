@@ -61,7 +61,7 @@ class UsersideCommand
         }
         foreach ($this->requiredParams as $param) {
             if (!isset($this->data[$param]) || $this->data[$param] === null) {
-                $result->message = "Not set " . $param;
+                $result->message = "Не указан " . $param;
             }
         }
         if ($result->message === null) {

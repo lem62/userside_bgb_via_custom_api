@@ -22,6 +22,6 @@ return [
     'storage_id' => 16,
     'extra_field' => [
         'address' => $this->dotEnvConfig('EF_ADDRESS', 42),
-        'catv' => $this->dotEnvConfig('EF_CATV',59),
+        'catv' => $this->dotEnvConfig('EF_CATV',69),
     ],
 ];
