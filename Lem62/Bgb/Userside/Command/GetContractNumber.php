@@ -14,7 +14,7 @@ class GetContractNumber extends UsersideCommand implements ApiRequest
     public function __construct()
     {
         $this->url = "command=get_contract_number";
-        $this->requiredParams = ['customer_id', 'group', 'name', 'tariff', 'curator', 'phone'];
+        $this->requiredParams = ['customer_id', 'group', 'name', 'tariff', 'curator'];
         $this->data = [
             'customer_id' => null, // id абонента в US
             'group' => null, // Группа
