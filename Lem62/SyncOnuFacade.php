@@ -363,13 +363,12 @@ class SyncOnuFacade
         if ($this->forceFullSync) {
             $this->log->info("Force full sync");
             $this->fullSync = true;
-            return;
-        }
-
-        $currentHour = (int)date('H');
-        if ($currentHour > 4 && $currentHour <= 23) {
-            $this->fullSync = false;
-            return;
+        } else {
+            $currentHour = (int)date('H');
+            if ($currentHour > 4 && $currentHour <= 23) {
+                $this->fullSync = false;
+                return;
+            }
         }
         $lastFullSyncFile = $this->fileGetContent($this->logPath . $this->lastFullSyncFile);
         if (!$lastFullSyncFile) {
