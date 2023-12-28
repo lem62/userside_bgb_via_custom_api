@@ -3,9 +3,11 @@
 /**
  * @var Lem62\Traits\CustomDotEnv $this
 */
-
 return [
+    'debug' => $this->dotEnvConfig('DEBUG', false),
     'us_api_url' => $this->dotEnvConfig('USERSIDE_API_URL'),
+    'us_api_timeout' => 240, // 4 minutes
+    'billing_id' => 1,
     'onu_section_id' => 9,
     'tariff_list_id' => 25,
     'storage_id' => 16,
