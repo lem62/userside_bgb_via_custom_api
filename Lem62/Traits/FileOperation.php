@@ -4,15 +4,15 @@ namespace Lem62\Traits;
 
 trait FileOperation
 {
-    public function filePutContent($file, $content)
+    public function filePutContent($file, $content, $append = true)
     {
         if (!$this->validateFileName($file)) {
             return;
         }
-        if (!file_exists($file)) {
-            file_put_contents($file, $content . "\n");
-        } else {
+        if ($append) {
             file_put_contents($file, $content . "\n", FILE_APPEND);
+        } else {
+            file_put_contents($file, $content . "\n");
         }
     }
 

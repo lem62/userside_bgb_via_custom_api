@@ -11,15 +11,16 @@ require __DIR__ . '/Bgb/Db/MysqlDb.php';
 require __DIR__ . '/Userside/Api/ApiUserside.php';
 require __DIR__ . '/Userside/Api/Model/ApiRequest.php';
 require __DIR__ . '/Userside/Api/Model/UsersideAction.php';
-require __DIR__ . '/Userside/Api/Action/Customer/GetData.php';
+require __DIR__ . '/Userside/Api/Action/Module/GetUserList.php';
 require __DIR__ . '/Userside/Api/Action/Customer/GetAbonId.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryCatalog.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/AddInventoryAssortment.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryId.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventory.php';
 require __DIR__ . '/Userside/Api/Action/Inventory/AddInventory.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/AddInventoryAssortment.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/GetInventory.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryId.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryCatalog.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
+require __DIR__ . '/Userside/Api/Action/Inventory/DeleteInventory.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
@@ -28,15 +29,16 @@ use Lem62\Model\Config;
 use Lem62\Bgb\Db\MysqlDb;
 use Lem62\Userside\Api\ApiUserside;
 use Lem62\Userside\Api\Model\ApiRequest;
-use Lem62\Userside\Api\Action\Customer\GetData;
+use Lem62\Userside\Api\Action\Module\GetUserList;
 use Lem62\Userside\Api\Action\Customer\GetAbonId;
-use Lem62\Userside\Api\Action\Inventory\GetInventoryAmount;
-use Lem62\Userside\Api\Action\Inventory\TransferInventory;
-use Lem62\Userside\Api\Action\Inventory\GetInventoryCatalog;
-use Lem62\Userside\Api\Action\Inventory\AddInventoryAssortment;
-use Lem62\Userside\Api\Action\Inventory\GetInventoryId;
-use Lem62\Userside\Api\Action\Inventory\GetInventory;
 use Lem62\Userside\Api\Action\Inventory\AddInventory;
+use Lem62\Userside\Api\Action\Inventory\AddInventoryAssortment;
+use Lem62\Userside\Api\Action\Inventory\GetInventory;
+use Lem62\Userside\Api\Action\Inventory\GetInventoryId;
+use Lem62\Userside\Api\Action\Inventory\GetInventoryAmount;
+use Lem62\Userside\Api\Action\Inventory\GetInventoryCatalog;
+use Lem62\Userside\Api\Action\Inventory\TransferInventory;
+use Lem62\Userside\Api\Action\Inventory\DeleteInventory;
 
 class SyncOnuFacade 
 {
@@ -50,21 +52,35 @@ class SyncOnuFacade
     */
     private $db = null;
     private $fullSync = false;
+    private $forceFullSync = false;
     private $logPrefix = null;
     private $logPath = __DIR__ . "/../logs/sync/";
     private $isLock = false;
     private $lockFile = "sync_onu.lock";
     private $lockExpirePeriod = 3600; // seconds (1h)
     private $lastFullSyncFile = "last_full_sync_onu";
+    private $fullSyncStep = 86400; // seconds (24h)
+    private $lastMidnightSyncFile = "last_midnight_sync_onu";
+    private $midnightStep = 10800; // seconds (3h)
+
     /**
     * @var object $config
     */
     private $config = null;
     private $onuModels = null;
 
-    public function __construct(bool $fullSync)
+    public function __construct()
     {
         date_default_timezone_set('Asia/Bishkek');
+        set_error_handler(
+            function($level, $error, $file, $line){
+                if(0 === error_reporting()){
+                    return false;
+                }
+                throw new ErrorException($error, $level, $level, $file, $line);
+            },
+            E_ALL
+        );
         set_exception_handler([$this, 'exceptionHandler']);
         $this->log = new LogFile($this->logPath, "sync_onu");
         $this->checkLock();
@@ -74,9 +90,12 @@ class SyncOnuFacade
             return;
         }
         $this->config = new Config('sync_onu');
+        $this->debug = $this->config->debug;
         $this->db = new MysqlDb();
-        $this->apiUserside = new ApiUserside($this->config->us_api_url, 120);
-        $this->fullSync = $fullSync;
+        $this->apiUserside = new ApiUserside(
+            $this->config->us_api_url,
+            $this->config->us_api_timeout
+        );
     }
 
     public function __destruct()
@@ -86,83 +105,206 @@ class SyncOnuFacade
         $this->apiUserside = null;
         $this->log = null;
     }
-    
+
+    public function forceFullSync(bool $forceFullSync)
+    {
+        $this->forceFullSync = $forceFullSync;
+    }
+
     public function sync() 
     {
         $this->logPrefix = "sync";
+        $this->log->info("Start sync");
         if ($this->isLock) {
             $this->log("Lock file found", false);
             return;
         }
-        $this->filePutContent($this->logPath . $this->lockFile, time());
         $executeStart = hrtime(true);
-
-        /* Sync model list */
-        // $this->syncOnuModels();
-
-        /* Get ONU from billing */
-        $bgbOnu = $this->getBgbOnu($this->config->sync_modified_in);
-        
-        /* Add US customer ID and ONU */
-        foreach ($bgbOnu as $k => $v) {
-            $bgbOnu[$k]['customer_id'] = $this->findCustomer($v['cid']);
-            $bgbOnu[$k]['onu'] = $this->findOnu($v['sn']);
-    
+        $this->filePutContent($this->logPath . $this->lockFile, time(), false);
+        $this->setFullSync();
+        if ($this->fullSync) {
+            $this->syncFull();
+        } else {
+            $this->syncPartial();
         }
-        print_r($bgbOnu);
+        $this->fileRemove($this->logPath . $this->lockFile);
+        $this->log->info($this->executeTime($executeStart));
+        $this->log->info("Finish sync");
+    }
+
+    private function syncFull() 
+    {
+        $this->logPrefix = "syncFull";
 
         /* Get onu model list */
+        $this->log("## Get onu model list");
         $this->onuModels = $this->getOnuModels();
+        $this->log($this->onuModels);
         if (!$this->onuModels) {
-            $this->fileRemove($this->logPath . $this->lockFile);
-            $this->log->info("Execute time: " . ((hrtime(true) - $executeStart)/1e+6) . " ms.");
+            $this->log("Can no get model list", false);
+            return;
+        }
+        
+        /* Get Userside user IDs */ 
+        $this->log("## Get Userside user IDs");
+        $usUserIds = $this->getUsUserIds();
+        if (!$usUserIds) {
+            $this->log("Can no get all User ids (us)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
+        }
+ 
+        /* Get ONU from billing */
+        $this->log("## Get all ONU from billing");
+        $bgbOnu = $this->getBgbOnu(0);
+        if (!$bgbOnu) {
+            $this->log("Can no get all ONU (bgb)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
         }
 
+        /* Get all storage ONU */
+        $this->log("## Get all storage ONU");
+        $storageOnu = $this->getOnuArray('storage');
+        if (!$storageOnu) {
+            $this->log("Can no get all storage ONU (us)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
+        }
 
+        /* Get all customer ONU */
+        $this->log("## Get all customer ONU");
+        $customerOnu = $this->getOnuArray('customer');
+        if (!$customerOnu) {
+            $this->log("Can no get all customer ONU (us)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
+        }
 
-        
+        /* Add US customer ID and ONU */
+        $this->log("## Add US customer ID and ONU");
         foreach ($bgbOnu as $k => $v) {
-            if (!$v['customer_id']) { // No customer, no action
+            $bgbOnu[$k]['customer_id'] = isset($usUserIds[$v['cid']]) ? $usUserIds[$v['cid']] : null;
+            if (!$bgbOnu[$k]['customer_id']) { /* No customer, no action */
                 continue;
             }
+            $onu = isset($customerOnu[$v['sn']]) ? $customerOnu[$v['sn']] : null;
+            if (!$onu) {
+                $onu = isset($storageOnu[$v['sn']]) ? $storageOnu[$v['sn']] : null;
+            }
+            $bgbOnu[$k]['onu'] = $onu;
+        }
+
+        /* Perform sync */
+        $this->performSync($bgbOnu);
+    }
+
+    private function syncPartial() 
+    {
+        $this->logPrefix = "syncPartial";
+
+        /* Get ONU from billing */
+        $this->log("## Get ONU from billing");
+        $bgbOnu = $this->getBgbOnu(
+            ($this->modifiedFromMidnight()
+            ? 0
+            : $this->config->sync_modified_in)
+        );
+        $this->log("ONU array (next line):");
+        $this->log($bgbOnu);
+        if (!$bgbOnu) {
+            $this->log("There are no modified ONUs (bgb)");
+            return;
+        }
+
+        /* Sync model list */
+        $this->log("## Sync model list");
+        $this->syncOnuModels();
+        $this->logPrefix = "syncPartial";
+        
+        /* Get onu model list */
+        $this->log("## Get onu model list");
+        $this->onuModels = $this->getOnuModels();
+        if (!$this->onuModels) {
+            $this->log("Can no get model list", false);
+            return;
+        }
+
+        /* Add US customer ID and ONU */
+        $this->log("## Add US customer ID and ONU");
+        foreach ($bgbOnu as $k => $v) {
+            $bgbOnu[$k]['customer_id'] = $this->findCustomer($v['cid']);
+            if (!$bgbOnu[$k]['customer_id']) { /* No customer, no action */
+                $this->log("No customer in US cid: " . $v['cid']);
+                continue;
+            }
+            $bgbOnu[$k]['onu'] = $this->findOnu($v['sn']);
+        }
+
+        /* Perform sync */
+        $this->performSync($bgbOnu);
+    }
+
+    private function performSync(array $bgbOnu)  /* [cid, sn, model, onu => [id, customer_id, model, model_id]] */
+    {
+        /* Main actions (add, skip, transfer) */
+        $this->log("## Main actions (add, skip, transfer)");
+        $this->log("Count billing ONU: " . count($bgbOnu));
+        foreach ($bgbOnu as $k => $v) {
+            if (!$v['customer_id']) { /* No customer, no action */
+                $this->log("No customer in US cid: " . $v['cid']);
+                continue;
+            }
+            $this->log("cid: " . $v['cid'] . ", customer_id: " . $v['customer_id'] . ", sn: " . $v['sn'] . " / " . $v['model']);
+            $this->log($v);
             if (!$v['onu']) {
+                $existOnu = $this->existOnuCustomer($v['customer_id']);
+                if ($existOnu) {
+                    foreach ($existOnu as $key => $value) {
+                        $this->moveOnuStorage($value);
+                    }
+                }
                 $modelId = isset($this->onuModels[$v['model']]) 
                     ? $this->onuModels[$v['model']]
                     : $this->config->default_onu_model_id;
                 $newOnuId = $this->addOnu($v['sn'], $modelId);
-                $this->moveOnuCustomer($v['customer_id'], $newOnuId);
-            } else {
-                if ($v['model'] != $v['onu']['model']) {
-                    $this->log("Not equal ONU models", false);
+                $this->log("New ONU ID: " . $newOnuId);
+                if ($newOnuId === 0) {
+                    $this->log("New ONU not created", false);
                     $this->log($v, false);
-                }
-                if ($v['customer_id'] == $v['onu']['customer_id']) {
                     continue;
                 }
-                $this->moveOnuCustomer($v['customer_id'], $v['onu']['id']);
+                if (!$this->moveOnuCustomer($v['customer_id'], $newOnuId)) {
+                    $this->log("Can no transfer ONU to Customer", false);
+                    $this->log($v, false);
+                    continue;
+                }
+                $this->log("New ONU created and transferred");
+                continue;
             }
+            if ($v['model'] != $v['onu']['model']) {
+                $this->log("Not equal ONU models", false);
+                $this->log($v, false);
+            }
+            if ($v['customer_id'] == $v['onu']['customer_id']) {
+                $this->log("ONU already on customer");
+                continue;
+            }
+            $existOnu = $this->existOnuCustomer($v['customer_id']);
+            if ($existOnu) {
+                foreach ($existOnu as $key => $value) {
+                    $this->moveOnuStorage($value);
+                }
+            }
+            if (!$this->moveOnuCustomer($v['customer_id'], $v['onu']['id'])) {
+                $this->log("Can no transfer ONU to Customer", false);
+                $this->log($v, false);
+                continue;
+            }
+            $this->log("ONU transferred");
         }
-
-        // print_r($this->findOnu("HWTC43F58064"));
-        // $storageOnu = $this->getOnuArray('storage');
-        // $customerOnu = $this->getOnuArray('customer');
-        
-        /* Remove Lock file*/
-        $this->fileRemove($this->logPath . $this->lockFile);
-        $this->log->info("Execute time: " . ((hrtime(true) - $executeStart)/1e+6) . " ms.");
     }
 
-    public function exceptionHandler(Throwable $e) {
-        /* Lock on 3 minutes */
-        $this->filePutContent($this->logPath . $this->lockFile, (time()-($this->lockExpirePeriod-180)));
-        if (!$this->log) {
-            throw $e;
-        }
-        $this->log->exception("Message - " . $e->getMessage());
-        $this->log->exception("Trace -\n" . $e->getTraceAsString());
-        throw $e;
-    }
-      
     private function syncOnuModels()
     {
         $this->logPrefix = "syncOnuModels";        
@@ -199,20 +341,56 @@ class SyncOnuFacade
         return true;
     }
 
+    private function modifiedFromMidnight()
+    {
+        $lastMidnightSyncFile = $this->fileGetContent($this->logPath . $this->lastMidnightSyncFile);
+        if (!$lastMidnightSyncFile) {
+            $this->filePutContent($this->logPath . $this->lastMidnightSyncFile, time(), false);
+            $this->log->info("Choose from midnight");
+            return true;
+        }
+        $timeDiff = time() - (int)$lastMidnightSyncFile;
+        if ($timeDiff > $this->midnightStep) {
+            $this->filePutContent($this->logPath . $this->lastMidnightSyncFile, time(), false);
+            $this->log->info("Choose from midnight");
+            return true;
+        }
+        return false;
+    }
+
+    private function setFullSync()
+    {
+        if ($this->forceFullSync) {
+            $this->log->info("Force full sync");
+            $this->fullSync = true;
+            return;
+        }
+
+        $currentHour = (int)date('H');
+        if ($currentHour > 4 && $currentHour <= 23) {
+            $this->fullSync = false;
+            return;
+        }
+        $lastFullSyncFile = $this->fileGetContent($this->logPath . $this->lastFullSyncFile);
+        if (!$lastFullSyncFile) {
+            $this->filePutContent($this->logPath . $this->lastFullSyncFile, time(), false);
+            $this->log->info("It is full sync");
+            $this->fullSync = true;
+            return;
+        }
+        $timeDiff = time() - (int)$lastFullSyncFile;
+        if ($timeDiff > $this->fullSyncStep) {
+            $this->filePutContent($this->logPath . $this->lastFullSyncFile, time(), false);
+            $this->log->info("It is full sync");
+            $this->fullSync = true;
+            return;
+        }
+        $this->fullSync = false;
+    }
+
     /*
     * BGB
     */
-    private function getBgbOnuModels() 
-    {
-        $response = $this->db->fetchAll(
-            "select val model " .
-            "from contract_parameter_type_1 " .
-            "where pid = " . $this->config->bgb_onu_model_id . 
-            " group by val"
-        );
-        return $response;
-    }
-    
     private function getBgbOnu($minute = 0) 
     {
         $q =
@@ -257,10 +435,45 @@ class SyncOnuFacade
         return $cids;
     }
 
+    private function getBgbOnuModels() 
+    {
+        $response = $this->db->fetchAll(
+            "select val model " .
+            "from contract_parameter_type_1 " .
+            "where pid = " . $this->config->bgb_onu_model_id . 
+            " group by val"
+        );
+        return $response;
+    }
+
     /*
     * Userside
     */
-    private function getOnuModels() 
+    private function addOnu($onuSerial, $modelId) 
+    {
+        $request = new AddInventory();
+        $request->sn = $onuSerial;
+        $request->inventory_catalog_id = $modelId;
+        $request->trader_id = $this->config->trader_id;
+        $request->storage_id = $this->config->storage_id;
+        $request->comment = "bgb";
+        $response = $this->command($request);
+        if (!$response) {
+            return 0;
+        }
+        return $response['id'];
+    }
+
+    private function addOnuModel($model) 
+    {
+        $request = new AddInventoryAssortment();
+        $request->section_id = $this->config->onu_section_id;
+        $request->name = trim($model);
+        $request->unit_name = "шт.";
+        return $this->command($request);
+    }
+
+    public function getOnuModels(bool $modelInKey = true) 
     {
         $request = new GetInventoryCatalog();
         $request->section_id = $this->config->onu_section_id;
@@ -271,16 +484,20 @@ class SyncOnuFacade
         }
         $result = [];
         foreach ($response['data'] as $k => $v) {
-            $result[$v['name']] = $k;
+            if ($modelInKey) {
+                $result[$v['name']] = $k;
+            } else {
+                $result[$k] = $v['name'];
+            }
         }
         return $result;
     }
 
-    private function findOnu($serial) 
+    private function findOnu($sn) 
     {
         $request = new GetInventoryId();
         $request->data_typer = "serial_number";
-        $request->data_value = trim($serial);
+        $request->data_value = trim($sn);
         $response = $this->command($request);
         if (!$response) {
             return null;
@@ -297,10 +514,9 @@ class SyncOnuFacade
         $response = $response['data'];
         $result = [
             'id' => $response['id'],
+            'customer_id' => $response['location_object_id'],
             'model' => $response['name'],
             'model_id' => $response['catalog_id'],
-            'customer_id' => $response['location_object_id'],
-            'location' => $response['location_type_id'],
         ];
         return $result;
     }
@@ -314,44 +530,27 @@ class SyncOnuFacade
         return isset($response['Id']) ? $response['Id'] : 0;
     }
 
-    private function addOnuModel($model) 
+    private function getUsUserIds() 
     {
-        $request = new AddInventoryAssortment();
-        $request->section_id = $this->config->onu_section_id;
-        $request->name = trim($model);
-        $request->unit_name = "шт.";
-        return $this->command($request);
-    }
-
-    private function addOnu($onuSerial, $modelId) 
-    {
-        $request = new AddInventory();
-        $request->sn = $onuSerial;
-        $request->inventory_catalog_id = $modelId;
-        $request->trader_id = $this->config->trader_id;
-        $request->storage_id = $this->config->storage_id;
-        $request->comment = "bgb";
-        $response = $this->command($request);
-        if (!$response) {
-            return 0;
+        $request = new GetUserList();
+        $request->billing_id = $this->config->billing_id;
+        $request->is_id_billing_user_id = 1;
+        $request->is_with_potential = 1;
+        $url = $request->getUrl();
+        if ($url == null) {
+            $this->log("getUsUserIds Implementation: " . $request::class, false);
+            $this->log("getUsUserIds Url is null", false);
+            return null;
         }
-        return $response['id'];
-    }
-
-    private function moveOnuCustomer($customerId, $onuId)
-    {
-        $request = new TransferInventory();
-        $request->inventoryId = $onuId;
-        $request->dstAccount = $this->getCidForTransfer($customerId);
-        return ($this->command($request)) ? true : false;
-    }
-
-    private function moveOnuStorage($onuId)
-    {
-        $request = new TransferInventory();
-        $request->inventory_id = $onuId;
-        $request->dst_account = "2040300000" . $this->config->storage_id;
-        return ($this->command($request)) ? true : false;
+        $response = $this->apiUserside->get($url);
+        if (!is_array($response)) {
+            $this->log("getUsUserIds Response is not array", false);
+            return null;
+        }
+        foreach ($response as $key => $value) {
+            $result[$key] = $value['userside_id'];
+        }
+        return $result;
     }
 
     private function getOnuArray($location)
@@ -360,12 +559,16 @@ class SyncOnuFacade
         if (!$serials) {
             return null;
         }
+        $onuModels = $this->getOnuModels(false);
+        if (!$onuModels) {
+            return null;
+        }
         foreach ($serials['data'] as $k => $v) {
             $result[$v['serial_number']] = [
                 'id' => $k, 
-                'serial' => $v['serial_number'],
+                'model' => $onuModels[$v['inventory_type_id']],
                 'model_id' => $v['inventory_type_id'],
-                'customerId' => $v['object_id']
+                'customer_id' => $v['object_id']
             ];
         }
         return $result;
@@ -383,17 +586,72 @@ class SyncOnuFacade
         return $this->command($request);
     }
 
+    private function moveOnuCustomer($customerId, $onuId)
+    {
+        $request = new TransferInventory();
+        $request->inventory_id = $onuId;
+        $request->dst_account = $this->getCidForTransfer($customerId);
+        return $this->command($request);
+    }
+
+    private function moveOnuStorage($onuId)
+    {
+        $request = new TransferInventory();
+        $request->inventory_id = $onuId;
+        $request->dst_account = "2040300000" . $this->config->storage_id;
+        return $this->command($request);
+    }
+
+    private function removeOnu($onuId)
+    {
+        $request = new TransferInventory();
+        $request->inventory_id = $onuId;
+        $request->dst_account = "900030000" . $this->config->storage_id;
+        $response = $this->command($request);
+        if (!$response) {
+            return false;
+        }
+        $request = new DeleteInventory();
+        $request->id = $onuId;
+        $response = $this->command($request);
+        if (!$response) {
+            return false;
+        }
+        return true;
+    }
+
+    private function existOnuCustomer($customerId)
+    {
+        $request = new GetInventoryAmount();
+        $request->location = "customer";
+        $request->section_id = $this->config->onu_section_id;
+        $request->object_id = $customerId;
+        $response = $this->command($request);
+        if (!$response) {
+            return null;
+        }
+        if (!isset($response['data'])) {
+            return null;
+        }
+        if (count($response['data']) == 0) {
+            return null;
+        }
+        foreach ($response['data'] as $k => $v) {
+            $result[] = $v['id'];
+        }
+        return $result;
+    }
+
     private function command(ApiRequest $request)
     {
-        $result = null;
         $url = $request->getUrl();
         if ($url == null) {
             $this->log("Implementation: " . $request::class, false);
             $this->log("Url is null", false);
-            return $result;
+            return null;
         }
-        $this->log("Url: " . $url);
         $result = $this->apiUserside->get($url);
+        $this->log("Url: " . $url);
         $this->log("Response (on the next line): ");
         $this->log($result);
         if (!$this->checkResponse($result)) {
@@ -407,27 +665,27 @@ class SyncOnuFacade
 
     private function checkResponse($response)
     {
-        $result = false;
         if ($response === null) {
             $this->log("Null response", false);
-            return $result;
+            return false;
         }
         if (!is_array($response)) {
             $this->log("Response not array", false);
-            return $result;
+            return false;
         }
         if (count($response) == 0) {
             $this->log("Response zero count", false);
-            return $result;
+            return false;
         }
         if (!isset($response['result'])) {
             $this->log("Result index not exist", false);
-            return $result;
+            return false;
         }
-        if ($response['result'] == 'OK') {
-            $result = true;
+        if ($response['result'] != 'OK') {
+            $this->log("Result index not OK", false);
+            return false;
         }
-        return $result;
+        return true;
     }
 
     private function getCidForTransfer($cid)
@@ -448,7 +706,9 @@ class SyncOnuFacade
         return $this->config->pref_onu_on_customer . $zeros . $cid;
     }
 
-    /* Service */
+    /* 
+    * Service 
+    */
     private function log($msg, $info = true)
     {
         if ($info && !$this->debug) {
@@ -481,5 +741,22 @@ class SyncOnuFacade
             return;
         }
         $this->isLock = true;
+    }
+
+    public function executeTime($executeStart)
+    {
+        return "Execute time: " . ((hrtime(true) - $executeStart)/1e+6) . " ms.";
+    }
+
+    public function exceptionHandler(Throwable $e)
+    {
+        /* Lock on 3 minutes */
+        $this->filePutContent($this->logPath . $this->lockFile, (time()-($this->lockExpirePeriod-180)));
+        if (!$this->log) {
+            throw $e;
+        }
+        $this->log->exception("Message - " . $e->getMessage());
+        $this->log->exception("Trace -\n" . $e->getTraceAsString());
+        throw $e;
     }
 }
