@@ -11,6 +11,7 @@ return [
     'onu_section_id' => 9,
     'tariff_list_id' => 25,
     'storage_id' => 16,
+    'return_storage_id' => 59,
     'trader_id' => 1,
     'default_onu_model_id' => 22,
     'pref_onu_on_customer' => '20503',

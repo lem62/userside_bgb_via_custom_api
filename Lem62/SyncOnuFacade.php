@@ -2,25 +2,26 @@
 
 // error_reporting(E_ALL); ini_set('display_errors', 1);
 
-require __DIR__ . '/Log/LogFile.php';
-require __DIR__ . '/Traits/CustomDotEnv.php';
-require __DIR__ . '/Traits/OutputFormat.php';
-require __DIR__ . '/Traits/FileOperation.php';
-require __DIR__ . '/Model/Config.php';
-require __DIR__ . '/Bgb/Db/MysqlDb.php';
-require __DIR__ . '/Userside/Api/ApiUserside.php';
-require __DIR__ . '/Userside/Api/Model/ApiRequest.php';
-require __DIR__ . '/Userside/Api/Model/UsersideAction.php';
-require __DIR__ . '/Userside/Api/Action/Module/GetUserList.php';
-require __DIR__ . '/Userside/Api/Action/Customer/GetAbonId.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/AddInventory.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/AddInventoryAssortment.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventory.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryId.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryCatalog.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
-require __DIR__ . '/Userside/Api/Action/Inventory/DeleteInventory.php';
+require_once __DIR__ . '/Log/LogFile.php';
+require_once __DIR__ . '/Traits/CustomDotEnv.php';
+require_once __DIR__ . '/Traits/OutputFormat.php';
+require_once __DIR__ . '/Traits/FileOperation.php';
+require_once __DIR__ . '/Model/Config.php';
+require_once __DIR__ . '/Bgb/Db/MysqlDb.php';
+require_once __DIR__ . '/Userside/Api/ApiUserside.php';
+require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
+require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
+require_once __DIR__ . '/Userside/Api/Action/Module/GetUserList.php';
+require_once __DIR__ . '/Userside/Api/Action/Customer/GetAbonId.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/AddInventory.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/AddInventoryAssortment.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventory.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryId.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryAmount.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventoryCatalog.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/DeleteInventory.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetOperation.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
@@ -39,6 +40,7 @@ use Lem62\Userside\Api\Action\Inventory\GetInventoryAmount;
 use Lem62\Userside\Api\Action\Inventory\GetInventoryCatalog;
 use Lem62\Userside\Api\Action\Inventory\TransferInventory;
 use Lem62\Userside\Api\Action\Inventory\DeleteInventory;
+use Lem62\Userside\Api\Action\Inventory\GetOperation;
 
 class SyncOnuFacade 
 {
@@ -597,7 +599,14 @@ class SyncOnuFacade
     {
         $request = new TransferInventory();
         $request->inventory_id = $onuId;
-        $request->dst_account = "2040300000" . $this->config->storage_id;
+        $request->dst_account = "2040300000" . $this->config->return_storage_id;
+/*
+        $storageId = $this->getLastStorageId($onuId);
+        $storageId = ($storageId === 0) 
+            ? $this->config->return_storage_id
+            : $storageId;
+        $request->dst_account = "2040300000" . $storageId;
+*/
         return $this->command($request);
     }
 
@@ -637,6 +646,38 @@ class SyncOnuFacade
         }
         foreach ($response['data'] as $k => $v) {
             $result[] = $v['id'];
+        }
+        return $result;
+    }
+
+    private function getOperations($onuId) 
+    {
+        $request = new GetOperation();
+        $request->inventory_id = $onuId;
+        $response = $this->command($request);
+        if (!$response) {
+            return null;
+        }
+        if (!isset($response['data'])) {
+            return null;
+        }
+        return $response['data'];
+    }
+
+    private function getLastStorageId($onuId)
+    {
+        $result = 0;
+        $data = $this->getOperations($onuId);
+        if (!$data) {
+            return $result;
+        }
+        $data = array_reverse($data);
+        foreach ($data as $k => $v) {
+            if ($v['dst_account_type'] != 204) {
+                continue;
+            }
+            $result = $v['dst_account_object_id'];
+            break;
         }
         return $result;
     }
