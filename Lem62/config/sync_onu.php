@@ -12,7 +12,7 @@ return [
     'tariff_list_id' => 25,
     'storage_id' => 16,
     'return_south_storage_id' => 59,
-    'return_north_storage_id' => 59,
+    'return_north_storage_id' => 60,
     'trader_id' => 1,
     'default_onu_model_id' => 22,
     'pref_onu_on_customer' => '20503',

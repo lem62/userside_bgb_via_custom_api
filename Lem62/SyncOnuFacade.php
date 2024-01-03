@@ -613,7 +613,8 @@ class SyncOnuFacade
         return $this->command($request);
     }
 
-    private function getRegionStorageId($customerId) {
+    private function getRegionStorageId($customerId)
+    {
         $storageId = $this->config->return_south_storage_id;
         $request = new GetData();
         $request->customer_id = $customerId;
