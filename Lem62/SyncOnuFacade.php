@@ -13,6 +13,7 @@ require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
 require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
 require_once __DIR__ . '/Userside/Api/Action/Module/GetUserList.php';
 require_once __DIR__ . '/Userside/Api/Action/Customer/GetAbonId.php';
+require_once __DIR__ . '/Userside/Api/Action/Customer/GetData.php';
 require_once __DIR__ . '/Userside/Api/Action/Inventory/AddInventory.php';
 require_once __DIR__ . '/Userside/Api/Action/Inventory/AddInventoryAssortment.php';
 require_once __DIR__ . '/Userside/Api/Action/Inventory/GetInventory.php';
@@ -32,6 +33,7 @@ use Lem62\Userside\Api\ApiUserside;
 use Lem62\Userside\Api\Model\ApiRequest;
 use Lem62\Userside\Api\Action\Module\GetUserList;
 use Lem62\Userside\Api\Action\Customer\GetAbonId;
+use Lem62\Userside\Api\Action\Customer\GetData;
 use Lem62\Userside\Api\Action\Inventory\AddInventory;
 use Lem62\Userside\Api\Action\Inventory\AddInventoryAssortment;
 use Lem62\Userside\Api\Action\Inventory\GetInventory;
@@ -263,7 +265,7 @@ class SyncOnuFacade
                 $existOnu = $this->existOnuCustomer($v['customer_id']);
                 if ($existOnu) {
                     foreach ($existOnu as $key => $value) {
-                        $this->moveOnuStorage($value);
+                        $this->moveOnuStorage($value, $v['customer_id']);
                     }
                 }
                 $modelId = isset($this->onuModels[$v['model']]) 
@@ -295,7 +297,7 @@ class SyncOnuFacade
             $existOnu = $this->existOnuCustomer($v['customer_id']);
             if ($existOnu) {
                 foreach ($existOnu as $key => $value) {
-                    $this->moveOnuStorage($value);
+                    $this->moveOnuStorage($value, $v['customer_id']);
                 }
             }
             if (!$this->moveOnuCustomer($v['customer_id'], $v['onu']['id'])) {
@@ -595,11 +597,12 @@ class SyncOnuFacade
         return $this->command($request);
     }
 
-    private function moveOnuStorage($onuId)
+    private function moveOnuStorage($onuId, $customerId = 0)
     {
+        $storageId = $this->getRegionStorageId($customerId);
         $request = new TransferInventory();
         $request->inventory_id = $onuId;
-        $request->dst_account = "2040300000" . $this->config->return_storage_id;
+        $request->dst_account = "2040300000" . $storageId;
 /*
         $storageId = $this->getLastStorageId($onuId);
         $storageId = ($storageId === 0) 
@@ -608,6 +611,32 @@ class SyncOnuFacade
         $request->dst_account = "2040300000" . $storageId;
 */
         return $this->command($request);
+    }
+
+    private function getRegionStorageId($customerId) {
+        $storageId = $this->config->return_south_storage_id;
+        $request = new GetData();
+        $request->customer_id = $customerId;
+        $response = $this->command($request);
+        if (!$response || !isset($response['data'])) {
+            return $storageId;
+        }
+        $response= $response['data']['group'];
+        $groups = [
+            "3" => $this->config->return_south_storage_id, // Gpon Юг частный Дом
+            "4" => $this->config->return_south_storage_id, // Gpon Юг многоэтажный дом
+            "5" => $this->config->return_south_storage_id, // А.Равшан
+            "6" => $this->config->return_north_storage_id, // Gpon север частный Дом
+            "7" => $this->config->return_north_storage_id, // Gpon север многоэтажный дом
+            "8" => $this->config->return_north_storage_id, // Gpon Токмок многоэтажный дом
+            "9" => $this->config->return_north_storage_id, // Gpon Токмок частный Дом
+            "10" => $this->config->return_south_storage_id, // Gpon Узген многоэтажный дом
+            "11" => $this->config->return_south_storage_id // Gpon Узген частный Дом
+        ];
+        foreach ($response as $v) {
+            $storageId = $groups[$v['id']];
+        }
+        return $storageId;
     }
 
     private function removeOnu($onuId)
