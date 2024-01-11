@@ -622,6 +622,9 @@ class SyncOnuFacade
         if (!$response || !isset($response['data'])) {
             return $storageId;
         }
+        if (!isset($response['data']['group']) || count($response['data']['group']) == 0) {
+            return $storageId;
+        }
         $response= $response['data']['group'];
         $groups = [
             "3" => $this->config->return_south_storage_id, // Gpon Юг частный Дом
