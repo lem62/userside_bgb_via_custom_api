@@ -57,7 +57,7 @@ class BgbUsFacade
     * @var object $config
     */
     private $config = null;
-    private $supervisor = [184,59];
+    private $supervisor = [8,59,82,166,184];
 
     public function __construct()
     {
