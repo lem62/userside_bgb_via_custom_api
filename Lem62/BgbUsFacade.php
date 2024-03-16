@@ -24,6 +24,7 @@ require_once __DIR__ . '/Userside/Api/Action/Inventory/TransferInventory.php';
 require_once __DIR__ . '/Userside/Api/Action/Task/Show.php';
 require_once __DIR__ . '/Userside/Api/Action/Task/ChangeState.php';
 require_once __DIR__ . '/Userside/Api/Action/Employee/GetData.php';
+require_once __DIR__ . '/Userside/Api/Action/Inventory/GetOperation.php';
 
 use Lem62\Log\LogFile;
 use Lem62\Traits\OutputFormat;
@@ -41,6 +42,7 @@ use Lem62\Userside\Api\Action\Inventory\TransferInventory;
 use Lem62\Userside\Api\Action\Task\Show;
 use Lem62\Userside\Api\Action\Task\ChangeState;
 use Lem62\Userside\Api\Action\Employee\GetData as GetEmployeeData;
+use Lem62\Userside\Api\Action\Inventory\GetOperation;
 
 class BgbUsFacade 
 {
@@ -121,12 +123,14 @@ class BgbUsFacade
             case $this->config->status['apply_equipmnet']: // Регистрация Ону
                 return $this->attachGponSerial($eventArray['taskId'], $eventArray['customerId']);
             case $this->config->status['cancel']: // Отмена предыдущего статуса
+                    /*
                 if (!isset($eventArray['stateCurrendId'])) {
                     break;
                 }
                 if ($eventArray['stateCurrendId'] != $this->config->status['add_equipment']) { // ТМЦ
                     break;
                 }
+                */
                 return $this->removeEquipmentInTask($eventArray['taskId']);
             case $this->config->status['finish']: // Выполнено
                 $taskType = $this->getTaskType($eventArray['taskId']);
@@ -279,7 +283,7 @@ class BgbUsFacade
     private function removeEquipmentInTask($taskId)
     {
         $this->setLogPrefix("removeEquipmentInTask");
-        $onus = $this->getEquipmentFromTask($taskId);
+        $onus = $this->getOnusFromTask($taskId);
         if (!$onus) {
             $this->log("There are no equipments in task or can no get list (anyway return success)");
             return $this->response(true, "В задаче нет ТМЦ");
@@ -299,7 +303,7 @@ class BgbUsFacade
     private function attachGponSerial($taskId, $customerId) 
     {
         $this->setLogPrefix("attachGponSerial");
-        $serials = $this->getEquipmentFromTask($taskId);
+        $serials = $this->getOnusFromTask($taskId);
         if (!$serials) {
             $this->log("Can not find Onu in task", false);
             return $this->response(false, "Не удалось найти ONU в задаче");
@@ -365,6 +369,11 @@ class BgbUsFacade
         }
         if ($msg['result'] != '1') {
             return true;
+        }
+        if (isset($_SERVER['QUERY_STRING']) && strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode($msg);
+            exit();
         }
         $msg = "&msg=" . urldecode($msg['msg']);
         header('Location: ' . $this->redirectUrl . $msg);
@@ -559,6 +568,15 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
+    private function getOnusFromTask($taskId) 
+    {
+        $request = new GetInventoryAmount();
+        $request->location = "task";
+        $request->section_id = $this->config->onu_section_id;
+        $request->object_id = $taskId;
+        return $this->stringToJson($this->command($request));
+    }
+
     private function getCustomerData($customerId) 
     {
         $request = new GetData();
@@ -615,10 +633,46 @@ class BgbUsFacade
         * Мы не реализуем удаление серийного, они возобновляемые.
         * Возвращаем их на склад ($this->config->storage_id)
         */
+        $storageId = $this->getLastStorageId($invId);
+        $storageId = ($storageId === 0) 
+            ? $this->config->return_storage_id
+            : $storageId;
         $request = new TransferInventory();
         $request->inventory_id = $invId;
-        $request->dst_account = "2040300000" . $this->config->storage_id;
+        $request->dst_account = "2040300000" . $storageId;
         return $this->stringToJson($this->command($request));
+    }
+
+    private function getOperations($invId) 
+    {
+        $request = new GetOperation();
+        $request->inventory_id = $invId;
+        $response = $this->command($request);
+        if (!$response) {
+            return null;
+        }
+        if (!isset($response['data'])) {
+            return null;
+        }
+        return $response['data'];
+    }
+
+    private function getLastStorageId($invId)
+    {
+        $result = 0;
+        $data = $this->getOperations($invId);
+        if (!$data) {
+            return $result;
+        }
+        $data = array_reverse($data);
+        foreach ($data as $k => $v) {
+            if ($v['dst_account_type'] != 204) {
+                continue;
+            }
+            $result = $v['dst_account_object_id'];
+            break;
+        }
+        return $result;
     }
 
     private function changeTaskStatus($taskId, $statusId) 
