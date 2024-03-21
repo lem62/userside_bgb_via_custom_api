@@ -383,6 +383,7 @@ class BgbUsFacade
 
     private function jsonResponse($msg)
     {
+        $this->log("JSON Response - " . json_encode($msg));
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($msg);
         exit();
