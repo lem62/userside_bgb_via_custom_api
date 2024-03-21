@@ -174,9 +174,9 @@ class BgbUsFacade
         $this->setRedirectUrl("/oper/?core_section=task&action=show&id=" . $eventArray['taskId']);
         switch ($eventArray['stateId']) {
             case $this->config->status['get_contract']: // Получение номера договора
-                return $this->response(false, "Номер договора выделен");
+                return $this->response(false, "Номер договора выделен", "0");
             case $this->config->status['apply_equipmnet']: // Регистрация Ону
-                return $this->response(false, "ONU зарегистрирована");
+                return $this->response(false, "ONU зарегистрирована", "0");
         }
         return $this->response(true, "Обработано");
     }
@@ -351,11 +351,17 @@ class BgbUsFacade
         }
     }
 
-    public function response($succes, $msg)
+    public function response($succes, $msg, $alternativeResult = null)
     {
         $this->log("Response - succes: " . $succes . ", msg: " . $msg);
         $result['result'] = ($succes) ? "0" : "1";
         $result['msg'] = $msg;
+        if (isset($_SERVER['QUERY_STRING']) && strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
+            if ($alternativeResult !== null) {
+                $result['result'] = $alternativeResult;
+            }
+            return $this->jsonResponse($result);
+        }
         return $this->redirectIfError($result);
     }
 
@@ -370,14 +376,17 @@ class BgbUsFacade
         if ($msg['result'] != '1') {
             return true;
         }
-        if (isset($_SERVER['QUERY_STRING']) && strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
-            header('Content-Type: application/json; charset=utf-8');
-            echo json_encode($msg);
-            exit();
-        }
         $msg = "&msg=" . urldecode($msg['msg']);
         header('Location: ' . $this->redirectUrl . $msg);
         exit();
+    }
+
+    private function jsonResponse($msg)
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($msg);
+        exit();
+
     }
 
     private function redirectToTask()
