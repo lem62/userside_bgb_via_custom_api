@@ -78,6 +78,26 @@ class EquipmentOnecFacade
         $facade->prepare($equipment);
         $facade->perform();
     }
+
+    public function refrashOnu($eventArray)
+    {
+        if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') === false) {
+            return;
+        }
+        if (!isset($eventArray['id'])) {
+            $this->response->message = "Not set equipment id in event";
+            $this->response($this->response);
+            return;
+        }
+        $equipment = $this->getEquipment($eventArray['id']);
+        if (!$equipment) {
+            $this->response->message = "Can not get equipment by id";
+            $this->response($this->response);
+            return;
+        }
+        $this->response->message = $equipment['data'];
+        $this->response($this->response);
+    }
     
     private function getEquipment($equipmentId) 
     {
@@ -157,5 +177,28 @@ class EquipmentOnecFacade
             $result = true;
         }
         return $result;
+    }
+
+    public function response(QueryResponse $response, $also = null)
+    {
+        $this->log("Response - " . $response->result . ", msg: " . $response->message);
+        if (isset($_SERVER['QUERY_STRING']) && strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
+            return $this->jsonResponse($response);
+        }
+    }
+
+    private function jsonResponse(QueryResponse $response)
+    {
+        if (!$response) {
+            return true;
+        }
+        if ($response->result === null) {
+            return true;
+        }
+        $this->log("JSON Response - " . json_encode($response));
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($response);
+        exit();
+
     }
 }

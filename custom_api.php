@@ -20,6 +20,7 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
         case "inventory_transfer":
             $equipmentOnecFacade = new EquipmentOnecFacade();
             $equipmentOnecFacade->sendEquipment($arg1);
+            $equipmentOnecFacade->refrashOnu($arg1);
             break;
     }
     return true;
