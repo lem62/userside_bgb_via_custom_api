@@ -20,8 +20,11 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
         case "inventory_transfer":
             $equipmentOnecFacade = new EquipmentOnecFacade();
             $equipmentOnecFacade->sendEquipment($arg1);
-            $equipmentOnecFacade->refrashOnu($arg1);
             break;
+
+        case "user_mark_add":
+            $bgbUsFacade = new BgbUsFacade();
+            return $bgbUsFacade->refreshOnu($arg1);
     }
     return true;
 }

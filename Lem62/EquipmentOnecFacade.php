@@ -79,26 +79,6 @@ class EquipmentOnecFacade
         $facade->perform();
     }
 
-    public function refrashOnu($eventArray)
-    {
-        if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') === false) {
-            return;
-        }
-        if (!isset($eventArray['id'])) {
-            $this->response->message = "Not set equipment id in event";
-            $this->response($this->response);
-            return;
-        }
-        $equipment = $this->getEquipment($eventArray['id']);
-        if (!$equipment) {
-            $this->response->message = "Can not get equipment by id";
-            $this->response($this->response);
-            return;
-        }
-        $this->response->message = $equipment['data'];
-        $this->response($this->response);
-    }
-    
     private function getEquipment($equipmentId) 
     {
         $request = new GetInventory();

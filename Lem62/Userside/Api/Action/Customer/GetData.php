@@ -5,10 +5,10 @@ namespace Lem62\Userside\Api\Action\Customer;
 use Lem62\Userside\Api\Model\ApiRequest;
 use Lem62\Userside\Api\Model\UsersideAction;
 
-/*
-* Implementation: get_data
-* See: https://wiki.userside.eu/API_customer
-*/
+/**
+ * Implementation: get_data
+ * See: https://wiki.userside.eu/API_customer
+ */
 
 class GetData extends UsersideAction implements ApiRequest
 {

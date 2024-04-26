@@ -13,6 +13,7 @@ require_once __DIR__ . '/Bgb/Model/UsersideCommand.php';
 require_once __DIR__ . '/Bgb/Userside/UsersideFacade.php';
 require_once __DIR__ . '/Bgb/Userside/Command/GetContractNumber.php';
 require_once __DIR__ . '/Bgb/Userside/Command/AttachGponSerial.php';
+require_once __DIR__ . '/Bgb/Userside/Command/RefreshOnu.php';
 require_once __DIR__ . '/Userside/Api/ApiUserside.php';
 require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
 require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
@@ -32,6 +33,7 @@ use Lem62\Model\Config;
 use Lem62\Bgb\Userside\UsersideFacade;
 use Lem62\Bgb\Userside\Command\GetContractNumber;
 use Lem62\Bgb\Userside\Command\AttachGponSerial;
+use Lem62\Bgb\Userside\Command\RefreshOnu;
 use Lem62\Userside\Api\ApiUserside;
 use Lem62\Userside\Api\Model\ApiRequest;
 use Lem62\Userside\Api\Action\Customer\GetData;
@@ -557,6 +559,9 @@ class BgbUsFacade
             case "attach_gpon_serial":
                 $this->command = new AttachGponSerial();
                 break;
+            case "refresh_onu":
+                $this->command = new RefreshOnu();
+                break;
             default:
                 $this->command = null;
         }
@@ -747,5 +752,63 @@ class BgbUsFacade
             $result = true;
         }
         return $result;
+    }
+
+    public function refreshOnu($eventArray)
+    {
+        $this->setLogPrefix("refreshOnu");
+        $customerId = (int)$eventArray;
+        if ($customerId < 1) {
+            $this->log("Not passed customer ID", false);
+            return $this->response(false, "Не передан ID абонента");
+        }
+        $params = $this->requestToArr();
+        if (!$params) {
+            $this->log("Can no get query params", false);
+            return $this->response(false, "Не удалось получить параметры запроса");
+        }
+        $onuSerial = $params['onu_serial'] ?? null;
+        if (!$onuSerial) {
+            $this->log("Not passed serial number ONU", false);
+            return $this->response(false, "Не передан серийный номер ONU");
+        }
+        if (!preg_match("/^(HWTC|HWFW|HWHW|GONT)([0-9A-Z]{8})$/", $onuSerial)) {
+            $this->log("Serial has wrong format", false);
+            return $this->response(false, "Серийный имеет неверный формат");
+        }
+        $serial["customer_id"] = $customerId;
+        $serial["onu_serial"] = $onuSerial;
+        $this->setCommand("refresh_onu");
+        $this->setData($serial);
+        $json = $this->execute();
+        if (!$json) {
+            $this->log("Can no execute request to bgb", false);
+            return $this->response(false, "Не удалось выполнить запрос в БГБ");
+        }
+        if (!$json->result) {
+            $msg = $json->message;
+            if (property_exists($json, "exception") && $json->exception !== null) {
+                $msg = $json->exception . " (" . $msg . ")";
+            }
+            $this->log($msg, false);
+            return $this->response(false, $msg);
+        }
+        return $this->response(false, "Успешно обработано");
+    }
+
+    private function requestToArr() : array|Null
+    {
+        if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
+            return null;
+        }
+        $result = [];
+        $queryString = explode("&", $_SERVER['QUERY_STRING']);
+        foreach ($queryString as [$value]) {
+            $value = explode("=", $value);
+            if (is_array($value) && count($value) == 2) {
+                $result[$value[0]] = $value[1];
+            }
+        }
+        return (count($result) == 0) ? null : $result;
     }
 }
