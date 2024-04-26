@@ -24,7 +24,7 @@ function api_function($apiFunction, $arg1 = 0, $arg2 = 0, $arg3 = 0, $arg4 = 0, 
 
         case "user_mark_add":
             $bgbUsFacade = new BgbUsFacade();
-            return $bgbUsFacade->refreshOnu($arg1);
+            return $bgbUsFacade->hiddenApi($arg1);
     }
     return true;
 }

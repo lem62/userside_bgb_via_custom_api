@@ -13,7 +13,7 @@ require_once __DIR__ . '/Bgb/Model/UsersideCommand.php';
 require_once __DIR__ . '/Bgb/Userside/UsersideFacade.php';
 require_once __DIR__ . '/Bgb/Userside/Command/GetContractNumber.php';
 require_once __DIR__ . '/Bgb/Userside/Command/AttachGponSerial.php';
-require_once __DIR__ . '/Bgb/Userside/Command/RefreshOnu.php';
+require_once __DIR__ . '/Bgb/Userside/Command/AttachOnu.php';
 require_once __DIR__ . '/Userside/Api/ApiUserside.php';
 require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
 require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
@@ -33,7 +33,7 @@ use Lem62\Model\Config;
 use Lem62\Bgb\Userside\UsersideFacade;
 use Lem62\Bgb\Userside\Command\GetContractNumber;
 use Lem62\Bgb\Userside\Command\AttachGponSerial;
-use Lem62\Bgb\Userside\Command\RefreshOnu;
+use Lem62\Bgb\Userside\Command\AttachOnu;
 use Lem62\Userside\Api\ApiUserside;
 use Lem62\Userside\Api\Model\ApiRequest;
 use Lem62\Userside\Api\Action\Customer\GetData;
@@ -559,8 +559,8 @@ class BgbUsFacade
             case "attach_gpon_serial":
                 $this->command = new AttachGponSerial();
                 break;
-            case "refresh_onu":
-                $this->command = new RefreshOnu();
+            case "attach_onu":
+                $this->command = new AttachOnu();
                 break;
             default:
                 $this->command = null;
@@ -754,20 +754,35 @@ class BgbUsFacade
         return $result;
     }
 
-    public function refreshOnu($eventArray)
+    public function hiddenApi($eventArray)
     {
-        $this->setLogPrefix("refreshOnu");
-        $customerId = (int)$eventArray;
-        if ($customerId < 1) {
-            $this->log("Not passed customer ID", false);
-            return $this->response(false, "Не передан ID абонента");
-        }
+        $this->setLogPrefix("hiddenApi");
         $params = $this->requestToArr();
         if (!$params) {
             $this->log("Can no get query params", false);
             return $this->response(false, "Не удалось получить параметры запроса");
         }
-        $onuSerial = $params['onu_serial'] ?? null;
+        if (!isset($params['_command'])) {
+            $this->log("Undef _command", false);
+            return $this->response(false, "Не передана команда");
+        }
+        switch ($params['_command']) {
+            case 'attach_onu':
+                return $this->attachOnu($eventArray, $params);
+            default:
+                $this->log("Unknown _command", false);
+                return $this->response(false, "Неизвестная команда");
+        }
+    }
+    private function attachOnu($eventArray, $params)
+    {
+        $this->setLogPrefix("refreshOnu");
+        $contractNumber = $params['_contract_number'] ?? null;
+        if (!$contractNumber) {
+            $this->log("Not passed contract number", false);
+            return $this->response(false, "Не передан номер договора");
+        }
+        $onuSerial = $params['_onu_serial'] ?? null;
         if (!$onuSerial) {
             $this->log("Not passed serial number ONU", false);
             return $this->response(false, "Не передан серийный номер ONU");
@@ -776,9 +791,9 @@ class BgbUsFacade
             $this->log("Serial has wrong format", false);
             return $this->response(false, "Серийный имеет неверный формат");
         }
-        $serial["customer_id"] = $customerId;
+        $serial["contract_number"] = $contractNumber;
         $serial["onu_serial"] = $onuSerial;
-        $this->setCommand("refresh_onu");
+        $this->setCommand("attach_onu");
         $this->setData($serial);
         $json = $this->execute();
         if (!$json) {
@@ -796,16 +811,19 @@ class BgbUsFacade
         return $this->response(false, "Успешно обработано");
     }
 
-    private function requestToArr() : array|Null
+    private function requestToArr($onlyExternalParam = true) : array|Null
     {
-        if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') !== false) {
+        if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') === false) {
             return null;
         }
         $result = [];
         $queryString = explode("&", $_SERVER['QUERY_STRING']);
-        foreach ($queryString as [$value]) {
+        foreach ($queryString as $value) {
             $value = explode("=", $value);
             if (is_array($value) && count($value) == 2) {
+                if ($onlyExternalParam && !str_starts_with($value[0], '_')) {
+                    continue;
+                }
                 $result[$value[0]] = $value[1];
             }
         }
