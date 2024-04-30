@@ -398,7 +398,6 @@ class BgbUsFacade
         header('Content-Type: application/json; charset=utf-8');
         echo json_encode($msg);
         exit();
-
     }
 
     private function redirectToTask()
@@ -760,11 +759,11 @@ class BgbUsFacade
         $params = $this->requestToArr();
         if (!$params) {
             $this->log("Can no get query params", false);
-            return $this->response(false, "Не удалось получить параметры запроса");
+            return $this->response(true, "");
         }
         if (!isset($params['_command'])) {
             $this->log("Undef _command", false);
-            return $this->response(false, "Не передана команда");
+            return $this->response(true, "Не передана команда");
         }
         switch ($params['_command']) {
             case 'attach_onu':
@@ -774,6 +773,7 @@ class BgbUsFacade
                 return $this->response(false, "Неизвестная команда");
         }
     }
+
     private function attachOnu($eventArray, $params)
     {
         $this->setLogPrefix("refreshOnu");
@@ -808,7 +808,7 @@ class BgbUsFacade
             $this->log($msg, false);
             return $this->response(false, $msg);
         }
-        return $this->response(false, "Успешно обработано");
+        return $this->response(true, "Успешно обработано");
     }
 
     private function requestToArr($onlyExternalParam = true) : array|Null
