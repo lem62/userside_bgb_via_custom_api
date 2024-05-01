@@ -62,6 +62,7 @@ class BgbUsFacade
     */
     private $config = null;
     private $supervisor = [8,59,82,166,184];
+    private $hiddenApiParams = null;
 
     public function __construct()
     {
@@ -756,40 +757,44 @@ class BgbUsFacade
     public function hiddenApi($eventArray)
     {
         $this->setLogPrefix("hiddenApi");
-        $params = $this->requestToArr();
-        if (!$params) {
-            $this->log("Can no get query params", false);
+        $this->fillHiddenApiParams();
+        if (!$this->hiddenApiParams) {
+            $this->log("Can no get params", false);
+            /**
+             * Без параметров скрытого API пропускаем запрос,
+             * чтобы выполнился как есть 
+             */
             return $this->response(true, "");
         }
-        if (!isset($params['_command'])) {
+        if (!isset($this->hiddenApiParams['_command'])) {
             $this->log("Undef _command", false);
-            return $this->response(true, "Не передана команда");
+            return $this->hiddenApiResponse(false, "Не передана команда");
         }
-        switch ($params['_command']) {
+        switch ($this->hiddenApiParams['_command']) {
             case 'attach_onu':
-                return $this->attachOnu($eventArray, $params);
+                return $this->attachOnu($eventArray);
             default:
                 $this->log("Unknown _command", false);
-                return $this->response(false, "Неизвестная команда");
+                return $this->hiddenApiResponse(false, "Неизвестная команда");
         }
     }
 
-    private function attachOnu($eventArray, $params)
+    private function attachOnu($eventArray)
     {
         $this->setLogPrefix("refreshOnu");
-        $contractNumber = $params['_contract_number'] ?? null;
+        $contractNumber = $this->hiddenApiParams['_contract_number'] ?? null;
         if (!$contractNumber) {
             $this->log("Not passed contract number", false);
-            return $this->response(false, "Не передан номер договора");
+            return $this->hiddenApiResponse(false, "Не передан номер договора");
         }
-        $onuSerial = $params['_onu_serial'] ?? null;
+        $onuSerial = $this->hiddenApiParams['_onu_serial'] ?? null;
         if (!$onuSerial) {
             $this->log("Not passed serial number ONU", false);
-            return $this->response(false, "Не передан серийный номер ONU");
+            return $this->hiddenApiResponse(false, "Не передан серийный номер ONU");
         }
         if (!preg_match("/^(HWTC|HWFW|HWHW|GONT)([0-9A-Z]{8})$/", $onuSerial)) {
             $this->log("Serial has wrong format", false);
-            return $this->response(false, "Серийный имеет неверный формат");
+            return $this->hiddenApiResponse(false, "Серийный ONU имеет неверный формат");
         }
         $serial["contract_number"] = $contractNumber;
         $serial["onu_serial"] = $onuSerial;
@@ -798,7 +803,7 @@ class BgbUsFacade
         $json = $this->execute();
         if (!$json) {
             $this->log("Can no execute request to bgb", false);
-            return $this->response(false, "Не удалось выполнить запрос в БГБ");
+            return $this->hiddenApiResponse(false, "Не удалось выполнить запрос в БГБ");
         }
         if (!$json->result) {
             $msg = $json->message;
@@ -806,17 +811,17 @@ class BgbUsFacade
                 $msg = $json->exception . " (" . $msg . ")";
             }
             $this->log($msg, false);
-            return $this->response(false, $msg);
+            return $this->hiddenApiResponse(false, $msg);
         }
-        return $this->response(true, "Успешно обработано");
+        return $this->hiddenApiResponse(true, "Успешно обработано");
     }
 
-    private function requestToArr($onlyExternalParam = true) : array|Null
+    private function fillHiddenApiParams($onlyExternalParam = true) : array|Null
     {
         if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') === false) {
             return null;
         }
-        $result = [];
+        $this->hiddenApiParams = [];
         $queryString = explode("&", $_SERVER['QUERY_STRING']);
         foreach ($queryString as $value) {
             $value = explode("=", $value);
@@ -824,9 +829,21 @@ class BgbUsFacade
                 if ($onlyExternalParam && !str_starts_with($value[0], '_')) {
                     continue;
                 }
-                $result[$value[0]] = $value[1];
+                $this->hiddenApiParams[$value[0]] = $value[1];
             }
         }
-        return (count($result) == 0) ? null : $result;
+        return (count($this->hiddenApiParams) == 0) ? null : $this->hiddenApiParams;
+    }
+
+    private function hiddenApiResponse(bool $result, $msg)
+    {
+        $msg = [
+            'result' => $result ? '0' : '1',
+            'msg' => $msg,
+        ];
+        $this->log("Hidden API Response - " . json_encode($msg));
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($msg);
+        exit();
     }
 }
