@@ -21,7 +21,7 @@ use Lem62\Onec\Command\NewCustomerData;
 
 
 
-$api = new ApiUserside("http://192.168.2.216/api.php?skip_internal_api=1&key=aspergilus&");
+$api = new ApiUserside("http://127.0.0.1/api.php?skip_internal_api=1&key=&");
 $equipmentId = 385420;
 $e = $api->get("&cat=inventory&action=get_inventory&id=" . $equipmentId);
 $equipment = $e['data'];
