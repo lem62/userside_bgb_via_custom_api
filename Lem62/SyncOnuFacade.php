@@ -115,6 +115,27 @@ class SyncOnuFacade
         $this->forceFullSync = $forceFullSync;
     }
 
+    public function syncStorages() 
+    {
+        $this->logPrefix = "syncStorages";
+        $this->log->info("Start sync");
+        if ($this->isLock) {
+            $this->log("Lock file found", false);
+            return;
+        }
+        $executeStart = hrtime(true);
+        $this->filePutContent($this->logPath . $this->lockFile, time(), false);
+        $this->setFullSync();
+        if ($this->fullSync) {
+            $this->syncFull();
+        } else {
+            $this->syncPartial();
+        }
+        $this->fileRemove($this->logPath . $this->lockFile);
+        $this->log->info($this->executeTime($executeStart));
+        $this->log->info("Finish sync");
+    }
+
     public function sync() 
     {
         $this->logPrefix = "sync";
