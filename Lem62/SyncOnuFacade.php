@@ -66,6 +66,7 @@ class SyncOnuFacade
     private $fullSyncStep = 86400; // seconds (24h)
     private $lastMidnightSyncFile = "last_midnight_sync_onu";
     private $midnightStep = 10800; // seconds (3h)
+    private $onuLocations = ['customer', 'storage', 'task'];
 
     /**
     * @var object $config
@@ -94,7 +95,7 @@ class SyncOnuFacade
             return;
         }
         $this->config = new Config('sync_onu');
-        $this->debug = $this->config->debug;
+        $this->debug = true; // $this->config->debug;
         $this->db = new MysqlDb();
         $this->apiUserside = new ApiUserside(
             $this->config->us_api_url,
@@ -114,6 +115,85 @@ class SyncOnuFacade
     {
         $this->forceFullSync = $forceFullSync;
     }
+
+
+
+    public function doubleContracts()
+    {
+        $executeStart = hrtime(true);
+        print_r($this->config);
+        $request = new GetUserList();
+        $request->billing_id = $this->config->billing_id;
+        $request->is_id_billing_user_id = 0;
+        $request->is_with_potential = 1;
+        $url = $request->getUrl();
+        if ($url == null) {
+            $this->log("getUsUserIds Implementation: " . $request::class, false);
+            $this->log("getUsUserIds Url is null", false);
+            return null;
+        }
+        $response = $this->apiUserside->get($url);
+        if (!is_array($response)) {
+            $this->log("getUsUserIds Response is not array", false);
+            return null;
+        }
+        $contracts = [];
+        foreach ($response as $k => $v) {
+            $contracts[$v['agreement'][0]['number']][] = $k;
+        }
+        $i = 0;
+        foreach ($contracts as $k => $v) {
+            if (count($v) > 1) {
+                echo "$k\n";
+                print_r($v);
+                $i++;
+            }
+        }
+
+        echo "\n\n$i\n\n";
+        echo $this->executeTime($executeStart) . "\n\n";
+    }
+
+    public function doubleOnus()
+    {
+        $executeStart = hrtime(true);
+        $onus = [];
+        foreach ($this->onuLocations as $location) {
+            echo "## Get ONU location - {$location}\n";
+            $onus[$location] = $this->getOnuArray($location);
+            if ($onus[$location] === null) {
+                echo "\tCan no get {$location} ONU\n";
+            }
+        }
+        foreach ($this->onuLocations as $k => $v) {
+            $nextLoc = $this->onuLocations[($k+1)] ?? 0;
+            foreach ($onus[$v] as $sk => $sv) {
+                if (!isset($onus[$nextLoc][$sk])) {
+                    continue;
+                }
+                echo "$v == $nextLoc: $sk " . $onus[$nextLoc][$sk]['id']. "\n";
+            }
+        }
+        foreach ($this->onuLocations as $k => $v) {
+            foreach ($onus[$v] as $sk => $sv) {
+                if (strpos($sv['uniq'], ',') === false) {
+                    continue;
+                }
+                echo "$v: $sk " . $sv['uniq'] . "\n";
+            }
+        }
+        echo $this->executeTime($executeStart) . "\n\n";
+    }
+
+
+
+
+
+
+
+
+
+
 
     public function syncStorages() 
     {
@@ -188,36 +268,32 @@ class SyncOnuFacade
             return;
         }
 
-        /* Get all storage ONU */
-        $this->log("## Get all storage ONU");
-        $storageOnu = $this->getOnuArray('storage');
-        if (!$storageOnu) {
-            $this->log("Can no get all storage ONU (us)", false);
-            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
-            return;
-        }
-
-        /* Get all customer ONU */
-        $this->log("## Get all customer ONU");
-        $customerOnu = $this->getOnuArray('customer');
-        if (!$customerOnu) {
-            $this->log("Can no get all customer ONU (us)", false);
-            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
-            return;
+        /* Get all ONU */
+        $allOnu = [];
+        foreach ($this->onuLocations as $location) {
+            $this->log("## Get ONU location - {$location}");
+            $onus = $this->getOnuArray($location);
+            if ($onus === null) {
+                $this->log("Can no get {$location} ONU (us)", false);
+                $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+                return;
+            }
+            $allOnu += $onus;
         }
 
         /* Add US customer ID and ONU */
         $this->log("## Add US customer ID and ONU");
         foreach ($bgbOnu as $k => $v) {
-            $bgbOnu[$k]['customer_id'] = isset($usUserIds[$v['cid']]) ? $usUserIds[$v['cid']] : null;
-            if (!$bgbOnu[$k]['customer_id']) { /* No customer, no action */
+            $bgbOnu[$k]['customer_id'] = $usUserIds[$v['cid']] ?? null;
+            if ($bgbOnu[$k]['customer_id'] === null) { /* No customer, no action */
                 continue;
             }
-            $onu = isset($customerOnu[$v['sn']]) ? $customerOnu[$v['sn']] : null;
-            if (!$onu) {
-                $onu = isset($storageOnu[$v['sn']]) ? $storageOnu[$v['sn']] : null;
+            $bgbOnu[$k]['onu'] = $allOnu[$v['sn']] ?? null;
+            if ($bgbOnu[$k]['onu'] !== null && $bgbOnu[$k]['onu']['location_type'] === 'task') { // task - задание
+                $this->log("Excluded ONU (on the next line): ");
+                $this->log($bgbOnu[$k]['onu']);
+                unset($bgbOnu[$k]);
             }
-            $bgbOnu[$k]['onu'] = $onu;
         }
 
         /* Perform sync */
@@ -264,6 +340,11 @@ class SyncOnuFacade
                 continue;
             }
             $bgbOnu[$k]['onu'] = $this->findOnu($v['sn']);
+            if ($bgbOnu[$k]['onu'] !== null && $bgbOnu[$k]['onu']['location_type_id'] === 212) { // 212 - задание
+                $this->log("Excluded ONU (on the next line): ");
+                $this->log($bgbOnu[$k]['onu']);
+                unset($bgbOnu[$k]);
+            }
         }
 
         /* Perform sync */
@@ -280,8 +361,8 @@ class SyncOnuFacade
                 $this->log("No customer in US cid: " . $v['cid']);
                 continue;
             }
-            $this->log("cid: " . $v['cid'] . ", customer_id: " . $v['customer_id'] . ", sn: " . $v['sn'] . " / " . $v['model']);
             $this->log($v);
+            $this->log("cid: " . $v['cid'] . ", customer_id: " . $v['customer_id'] . ", sn: " . $v['sn'] . " / " . $v['model']);
             if (!$v['onu']) {
                 $existOnu = $this->existOnuCustomer($v['customer_id']);
                 if ($existOnu) {
@@ -541,6 +622,7 @@ class SyncOnuFacade
             'customer_id' => $response['location_object_id'],
             'model' => $response['name'],
             'model_id' => $response['catalog_id'],
+            'location_type_id' => $response['location_type_id'],
         ];
         return $result;
     }
@@ -587,12 +669,20 @@ class SyncOnuFacade
         if (!$onuModels) {
             return null;
         }
+        if (count($serials['data']) == 0) {
+            return [];
+        }
         foreach ($serials['data'] as $k => $v) {
+            $uniq = isset($result[$v['serial_number']]) 
+                ? $result[$v['serial_number']]['uniq'] . ',' . $k 
+                : (string)$k;
             $result[$v['serial_number']] = [
                 'id' => $k, 
                 'model' => $onuModels[$v['inventory_type_id']],
                 'model_id' => $v['inventory_type_id'],
-                'customer_id' => $v['object_id']
+                'customer_id' => $v['object_id'],
+                'location_type' => $v['location_type'] ?? null,
+                'uniq' => $uniq,
             ];
         }
         return $result;
@@ -600,10 +690,6 @@ class SyncOnuFacade
 
     private function getOnus($location) 
     {
-        if ($location !== 'customer' && $location !== 'storage') {
-            $this->log("Location must be customer or storage", false);
-            return null;
-        }
         $request = new GetInventoryAmount();
         $request->location = $location;
         $request->section_id = $this->config->onu_section_id;
