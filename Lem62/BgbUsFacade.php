@@ -46,7 +46,7 @@ use Lem62\Userside\Api\Action\Task\ChangeState;
 use Lem62\Userside\Api\Action\Employee\GetData as GetEmployeeData;
 use Lem62\Userside\Api\Action\Inventory\GetOperation;
 
-class BgbUsFacade 
+class BgbUsFacade
 {
     use OutputFormat;
 
@@ -58,10 +58,10 @@ class BgbUsFacade
     private $logPrefix = null;
     private $redirectUrl = null;
     /**
-    * @var object $config
-    */
+     * @var object $config
+     */
     private $config = null;
-    private $supervisor = [8,59,82,166,184];
+    private $supervisor = [8, 59, 82, 166, 184];
     private $hiddenApiParams = null;
 
     public function __construct()
@@ -70,7 +70,7 @@ class BgbUsFacade
         $this->api = new ApiUserside($this->config->us_api_url);
         $this->log = new LogFile(__DIR__ . "/../logs/", "bgb_us_facade");
     }
-    
+
     public function log($msg, $info = true)
     {
         if ($info && !$this->debug) {
@@ -126,7 +126,7 @@ class BgbUsFacade
             case $this->config->status['apply_equipmnet']: // Регистрация Ону
                 return $this->attachGponSerial($eventArray['taskId'], $eventArray['customerId']);
             case $this->config->status['cancel']: // Отмена предыдущего статуса
-                    /*
+                /*
                 if (!isset($eventArray['stateCurrendId'])) {
                     break;
                 }
@@ -171,6 +171,9 @@ class BgbUsFacade
             return $this->response(true, "Не определен id статуса в массиве из события");
         }
         if (!in_array($eventArray['stateId'], $this->config->status)) {
+            if ($eventArray['stateId'] === 3) {
+                $this->getTask($eventArray['taskId']);
+            }
             return $this->response(true, "Не подходящий id статуса в массиве из события");
         }
         $this->log("Event array - " . $this->arrayToString($eventArray, true));
@@ -184,7 +187,7 @@ class BgbUsFacade
         return $this->response(true, "Обработано");
     }
 
-    private function getContractNumber($taskId, $customerId) 
+    private function getContractNumber($taskId, $customerId)
     {
         $this->setLogPrefix("getContractNumber");
         $customer = $this->getCustomerData($customerId);
@@ -238,15 +241,15 @@ class BgbUsFacade
         }
         $phones = $this->getAllInObject($customer->data->phone, "number", ",");
         $address = $this->getByIndexInObject(
-            $customer->data->additional_data, 
-            $this->config->extra_field['address'], 
+            $customer->data->additional_data,
+            $this->config->extra_field['address'],
             "value"
         );
         $curator = $this->getFirstInArray($task['data']['staff']['employee'], null);
         $curator = $this->getEmployeeName($curator);
         $extra_catv = $this->getByIndexInArray(
-            $task['data']['additional_data'], 
-            $this->config->extra_field['catv'], 
+            $task['data']['additional_data'],
+            $this->config->extra_field['catv'],
             "value"
         );
         $customerData["customer_id"] = $customerId;
@@ -303,7 +306,7 @@ class BgbUsFacade
         return $this->response(true, "ТМЦ удалены");
     }
 
-    private function attachGponSerial($taskId, $customerId) 
+    private function attachGponSerial($taskId, $customerId)
     {
         $this->setLogPrefix("attachGponSerial");
         $serials = $this->getOnusFromTask($taskId);
@@ -345,7 +348,7 @@ class BgbUsFacade
         }
     }
 
-    private function switchToRegular($customerId) 
+    private function switchToRegular($customerId)
     {
         $this->setLogPrefix("switchToRegular");
         $regular = $this->switchToRegularCustomer($customerId);
@@ -406,7 +409,7 @@ class BgbUsFacade
         header('Location: ' . $this->redirectUrl);
         exit();
     }
-    
+
     private function getFirstInObject($object, $property)
     {
         foreach ($object as $key => $value) {
@@ -471,7 +474,7 @@ class BgbUsFacade
         return null;
     }
 
-    private function getTariffForBgb($taskId) 
+    private function getTariffForBgb($taskId)
     {
         $result = null;
         $task = $this->getTask($taskId);
@@ -499,7 +502,7 @@ class BgbUsFacade
         return $result;
     }
 
-    private function getTaskType($taskId) 
+    private function getTaskType($taskId)
     {
         $result = -1;
         $task = $this->getTask($taskId);
@@ -518,7 +521,8 @@ class BgbUsFacade
         return $task['data']['type']['id'];
     }
 
-    private function getBgbGroup($customer) {
+    private function getBgbGroup($customer)
+    {
         $groups = [
             "3" => 13, // Gpon Юг частный Дом
             "4" => 13, // Gpon Юг многоэтажный дом
@@ -575,7 +579,7 @@ class BgbUsFacade
     /*
     * Userside
     */
-    private function getSerialFromCustomer($customerId) 
+    private function getSerialFromCustomer($customerId)
     {
         $request = new GetInventoryAmount();
         $request->location = "customer";
@@ -584,7 +588,7 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
-    private function getEquipmentFromTask($taskId) 
+    private function getEquipmentFromTask($taskId)
     {
         $request = new GetInventoryAmount();
         $request->location = "task";
@@ -592,7 +596,7 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
-    private function getOnusFromTask($taskId) 
+    private function getOnusFromTask($taskId)
     {
         $request = new GetInventoryAmount();
         $request->location = "task";
@@ -601,14 +605,14 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
-    private function getCustomerData($customerId) 
+    private function getCustomerData($customerId)
     {
         $request = new GetData();
         $request->customer_id = $customerId;
         return $this->stringToJson($this->command($request));
     }
 
-    private function getEmployeeName($employeeId) 
+    private function getEmployeeName($employeeId)
     {
         $request = new GetEmployeeData();
         $request->id = $employeeId;
@@ -619,14 +623,14 @@ class BgbUsFacade
         return $response['data'][$employeeId]['name'];
     }
 
-    private function getTask($taskId) 
+    private function getTask($taskId)
     {
         $request = new Show();
         $request->id = $taskId;
         return $this->command($request);
     }
 
-    private function setContractNumber($customerId, $title) 
+    private function setContractNumber($customerId, $title)
     {
         $request = new Edit();
         $request->id = $customerId;
@@ -642,7 +646,7 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
-    private function setBillingId($customerId, $billingUserId) 
+    private function setBillingId($customerId, $billingUserId)
     {
         $request = new ChangeBilling();
         $request->customer_id = $customerId;
@@ -658,7 +662,7 @@ class BgbUsFacade
         * Возвращаем их на склад ($this->config->storage_id)
         */
         $storageId = $this->getLastStorageId($invId);
-        $storageId = ($storageId === 0) 
+        $storageId = ($storageId === 0)
             ? $this->config->return_storage_id
             : $storageId;
         $request = new TransferInventory();
@@ -667,7 +671,7 @@ class BgbUsFacade
         return $this->stringToJson($this->command($request));
     }
 
-    private function getOperations($invId) 
+    private function getOperations($invId)
     {
         $request = new GetOperation();
         $request->inventory_id = $invId;
@@ -699,7 +703,7 @@ class BgbUsFacade
         return $result;
     }
 
-    private function changeTaskStatus($taskId, $statusId) 
+    private function changeTaskStatus($taskId, $statusId)
     {
         $request = new ChangeState();
         $request->id = $taskId;
@@ -816,7 +820,7 @@ class BgbUsFacade
         return $this->hiddenApiResponse(true, "Успешно обработано");
     }
 
-    private function fillHiddenApiParams($onlyExternalParam = true) : array|Null
+    private function fillHiddenApiParams($onlyExternalParam = true): array|Null
     {
         if (!isset($_SERVER['QUERY_STRING']) || strpos($_SERVER['QUERY_STRING'], 'nogi=bogi') === false) {
             return null;
