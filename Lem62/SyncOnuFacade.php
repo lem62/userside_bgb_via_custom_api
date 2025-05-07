@@ -8,6 +8,18 @@ require_once __DIR__ . '/Traits/OutputFormat.php';
 require_once __DIR__ . '/Traits/FileOperation.php';
 require_once __DIR__ . '/Model/Config.php';
 require_once __DIR__ . '/Bgb/Db/MysqlDb.php';
+
+
+
+require_once __DIR__ . '/Bgb/Userside/UsersideResponse.php';
+require_once __DIR__ . '/Bgb/ApiBgb.php';
+require_once __DIR__ . '/Bgb/Model/ApiRequest.php';
+require_once __DIR__ . '/Bgb/Model/UsersideCommand.php';
+require_once __DIR__ . '/Bgb/Userside/UsersideFacade.php';
+require_once __DIR__ . '/Bgb/Userside/Command/AttachStorage.php';
+
+
+
 require_once __DIR__ . '/Userside/Api/ApiUserside.php';
 require_once __DIR__ . '/Userside/Api/Model/ApiRequest.php';
 require_once __DIR__ . '/Userside/Api/Model/UsersideAction.php';
@@ -29,6 +41,20 @@ use Lem62\Traits\OutputFormat;
 use Lem62\Traits\FileOperation;
 use Lem62\Model\Config;
 use Lem62\Bgb\Db\MysqlDb;
+
+
+
+
+
+use Lem62\Bgb\Userside\UsersideFacade;
+use Lem62\Bgb\Userside\Command\AttachStorage;
+
+
+
+
+
+
+
 use Lem62\Userside\Api\ApiUserside;
 use Lem62\Userside\Api\Model\ApiRequest;
 use Lem62\Userside\Api\Action\Module\GetUserList;
@@ -195,26 +221,119 @@ class SyncOnuFacade
 
 
 
+
+
+
+
+
+
+    /**
+     * Синхронизация складов с БГБ
+     * 
+     * Закладывается ручной запуск, поэтому логика скромна и проста
+     * 
+     * @return void
+     */
     public function syncStorages() 
     {
         $this->logPrefix = "syncStorages";
         $this->log->info("Start sync");
-        if ($this->isLock) {
-            $this->log("Lock file found", false);
+        $executeStart = hrtime(true);
+
+        var_dump($this->config);
+        exit;
+        /* Get ONU from billing */
+        $this->log("## Get all ONU from billing");
+        $bgbOnu = $this->getBgbOnu(0);
+        if (!$bgbOnu) {
+            $this->log("Can no get all ONU (bgb)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
             return;
         }
-        $executeStart = hrtime(true);
-        $this->filePutContent($this->logPath . $this->lockFile, time(), false);
-        $this->setFullSync();
-        if ($this->fullSync) {
-            $this->syncFull();
-        } else {
-            $this->syncPartial();
+        print_r($bgbOnu);
+        exit;
+
+        /* Get all storage ONU */
+        $this->log("## Get all storage ONU");
+        $storageOnu = null; // $this->getOnuArray('storage');
+        if (!$storageOnu) {
+            $this->log("Can no get all storage ONU (us)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
         }
-        $this->fileRemove($this->logPath . $this->lockFile);
+
+        /* Get all customer ONU */
+        $this->log("## Get all customer ONU");
+        $customerOnu = null; // $this->getOnuArray('customer');
+        if (!$customerOnu) {
+            $this->log("Can no get all customer ONU (us)", false);
+            $this->fileRemove($this->logPath . $this->lastFullSyncFile);
+            return;
+        }
         $this->log->info($this->executeTime($executeStart));
         $this->log->info("Finish sync");
     }
+
+    private function execute()
+    {
+        $usersideFacade = new UsersideFacade((new AttachStorage()), $this->log);
+        $usersideFacade->prepare([
+            'contract_number' => $contract,
+            'storage_name' => $storage,
+        ]);
+        $validated = $usersideFacade->validate();
+        if (!$validated->result) {
+            return $this->stringToJson($validated);
+        }
+        $response = $usersideFacade->perform();
+        $this->log->info("Response - " . $response);
+        return $this->stringToJson($response);
+    }
+
+    private function setCommand($command)
+    {
+        switch ($command) {
+            case "get_contract_number":
+                $this->command = new GetContractNumber();
+                break;AttachOnu
+            case "attach_gpon_serial":
+                $this->command = new AttachGponSerial();
+                break;
+            case "attach_onu":
+                $this->command = new AttachOnu();
+                break;
+            default:
+                $this->command = null;
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     public function sync() 
     {
